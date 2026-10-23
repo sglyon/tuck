@@ -1,0 +1,368 @@
+{
+  "date": "2026-10-23",
+  "host": {
+    "model": "Mac18,5",
+    "chip": "Apple M6",
+    "ram_bytes": 34359738368,
+    "os": "macOS 27.0.1",
+    "architecture": "arm64"
+  },
+  "tools": {
+    "rustc": "1.99.1",
+    "python": "3.12.7",
+    "numpy": "2.5.4",
+    "soxr": "0.5.0.post1",
+    "sherpa_onnx": "1.13.8"
+  },
+  "fixture": {
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/test_wavs/en.wav",
+    "sha256": "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6",
+    "pcm_sha256": "01ce3dfe8a93bd58c9931e3a0d74c9c92330582455ff517f03e7547f5b510583",
+    "samples": 61521,
+    "sample_rate": 16000,
+    "duration_seconds": 3.8450625,
+    "joined_duration_seconds": 30.7605
+  },
+  "model_manifest": {
+    "encoder.int8.onnx": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+    "decoder.int8.onnx": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+    "joiner.int8.onnx": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+    "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+    "silero_vad.onnx": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+  },
+  "onnxruntime_artifacts": {
+    "static": {
+      "version_string": "1.28.2",
+      "sha256": "589e781d544d85267be5d7e74eae68fddd40ba41bf27e9961f867378170f8802"
+    },
+    "wheel_dylib": {
+      "version_string": "1.28.2",
+      "sha256": "b0613d0ae53199a83b05fa48e169211498e9d40d54beaa372068ebe5ec5b0929"
+    }
+  },
+  "runs": {
+    "rust": [
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.994005834,
+        "eight_chunks_seconds": 3.408008167,
+        "first_decode_seconds": 0.437203459,
+        "joined_seconds": 3.340939667,
+        "language": "rust",
+        "load_seconds": 0.556802375,
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.424076375,
+          0.424563,
+          0.424538625,
+          0.43039975,
+          0.424467042
+        ],
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      },
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.94228625,
+        "eight_chunks_seconds": 3.402869,
+        "first_decode_seconds": 0.430230375,
+        "joined_seconds": 3.341104208,
+        "language": "rust",
+        "load_seconds": 0.512055875,
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.425794541,
+          0.426616083,
+          0.426743,
+          0.428227666,
+          0.427940167
+        ],
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      },
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.9436268329999999,
+        "eight_chunks_seconds": 3.431552125,
+        "first_decode_seconds": 0.430000375,
+        "joined_seconds": 3.328855,
+        "language": "rust",
+        "load_seconds": 0.513626458,
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.429353458,
+          0.427902709,
+          0.426050625,
+          0.426431,
+          0.428034417
+        ],
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      }
+    ],
+    "rust-shared": [
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.8291175,
+        "eight_chunks_seconds": 1.097055708,
+        "first_decode_seconds": 0.157889167,
+        "joined_seconds": 1.112204167,
+        "language": "rust",
+        "load_seconds": 0.671228333,
+        "native_linkage": "shared",
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "short_only": false,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.162418542,
+          0.136837875,
+          0.133813333,
+          0.136757875,
+          0.135335792
+        ],
+        "peak_rss_bytes": 2139947008,
+        "joined_text_repetitions": 8
+      },
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.9015613760000001,
+        "eight_chunks_seconds": 1.058666708,
+        "first_decode_seconds": 0.145888667,
+        "joined_seconds": 1.082607125,
+        "language": "rust",
+        "load_seconds": 0.755672709,
+        "native_linkage": "shared",
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "short_only": false,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.155898292,
+          0.15948425,
+          0.140160708,
+          0.135169458,
+          0.129510416
+        ],
+        "peak_rss_bytes": 2138669056,
+        "joined_text_repetitions": 8
+      },
+      {
+        "audio_seconds": 3.8450625,
+        "cold_load_decode_seconds": 0.844446959,
+        "eight_chunks_seconds": 1.1689232920000001,
+        "first_decode_seconds": 0.148252375,
+        "joined_seconds": 1.082656916,
+        "language": "rust",
+        "load_seconds": 0.696194584,
+        "native_linkage": "shared",
+        "provider_requested": "cpu",
+        "sample_count": 61521,
+        "sherpa_onnx": "1.13.8",
+        "short_only": false,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "threads": 2,
+        "warm_decode_seconds": [
+          0.147180291,
+          0.15285675,
+          0.163492959,
+          0.154565292,
+          0.260869791
+        ],
+        "peak_rss_bytes": 2134802432,
+        "joined_text_repetitions": 8
+      }
+    ],
+    "python": [
+      {
+        "language": "python",
+        "sherpa_onnx": "1.13.8",
+        "provider_requested": "cpu",
+        "threads": 2,
+        "sample_count": 61521,
+        "audio_seconds": 3.8450625,
+        "load_seconds": 0.6457258330192417,
+        "first_decode_seconds": 0.14057412499096245,
+        "cold_load_decode_seconds": 0.7862999580102041,
+        "warm_decode_seconds": [
+          0.14607074996456504,
+          0.128514957963489,
+          0.1298216669820249,
+          0.12734120897948742,
+          0.12841499998467043
+        ],
+        "eight_chunks_seconds": 1.0232165419729427,
+        "joined_seconds": 1.0123059159959666,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      },
+      {
+        "language": "python",
+        "sherpa_onnx": "1.13.8",
+        "provider_requested": "cpu",
+        "threads": 2,
+        "sample_count": 61521,
+        "audio_seconds": 3.8450625,
+        "load_seconds": 0.6151708750403486,
+        "first_decode_seconds": 0.13549499999498948,
+        "cold_load_decode_seconds": 0.7506658750353381,
+        "warm_decode_seconds": [
+          0.12966699997195974,
+          0.1291567919543013,
+          0.12979929195716977,
+          0.12857845798134804,
+          0.1279985829605721
+        ],
+        "eight_chunks_seconds": 1.0423680419917218,
+        "joined_seconds": 1.0043563330546021,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      },
+      {
+        "language": "python",
+        "sherpa_onnx": "1.13.8",
+        "provider_requested": "cpu",
+        "threads": 2,
+        "sample_count": 61521,
+        "audio_seconds": 3.8450625,
+        "load_seconds": 0.6058844169601798,
+        "first_decode_seconds": 0.1370928329997696,
+        "cold_load_decode_seconds": 0.7429772499599494,
+        "warm_decode_seconds": [
+          0.1331520420499146,
+          0.13155066699255258,
+          0.12902291695354506,
+          0.13009275001240894,
+          0.13198150001699105
+        ],
+        "eight_chunks_seconds": 1.05341687501641,
+        "joined_seconds": 1.0099057499901392,
+        "text": "Ask not what your country can do for you, ask what you can do for your country.",
+        "peak_rss_bytes": null,
+        "joined_text_repetitions": 8
+      }
+    ]
+  },
+  "rss_runs": {
+    "rust-rss": {
+      "audio_seconds": 3.8450625,
+      "cold_load_decode_seconds": 0.9739889990000001,
+      "eight_chunks_seconds": 3.4494869169999998,
+      "first_decode_seconds": 0.436459458,
+      "joined_seconds": 3.3483087080000002,
+      "language": "rust",
+      "load_seconds": 0.537529541,
+      "provider_requested": "cpu",
+      "sample_count": 61521,
+      "sherpa_onnx": "1.13.8",
+      "text": "Ask not what your country can do for you, ask what you can do for your country.",
+      "threads": 2,
+      "warm_decode_seconds": [
+        0.42880925,
+        0.425950666,
+        0.431035334,
+        0.432096791,
+        0.425362709
+      ],
+      "peak_rss_bytes": 1400995840,
+      "joined_text_repetitions": 8
+    },
+    "python-rss": {
+      "language": "python",
+      "sherpa_onnx": "1.13.8",
+      "provider_requested": "cpu",
+      "threads": 2,
+      "sample_count": 61521,
+      "audio_seconds": 3.8450625,
+      "load_seconds": 0.6146569580305368,
+      "first_decode_seconds": 0.13548116700258106,
+      "cold_load_decode_seconds": 0.7501381250331178,
+      "warm_decode_seconds": [
+        0.144849999982398,
+        0.13670170796103776,
+        0.13289495900971815,
+        0.13494712504325435,
+        0.13328383304178715
+      ],
+      "eight_chunks_seconds": 1.0765719169867225,
+      "joined_seconds": 1.0003694590413943,
+      "text": "Ask not what your country can do for you, ask what you can do for your country.",
+      "peak_rss_bytes": 2163064832,
+      "joined_text_repetitions": 8
+    },
+    "rust-shared-short": {
+      "audio_seconds": 3.8450625,
+      "cold_load_decode_seconds": 0.86644925,
+      "eight_chunks_seconds": null,
+      "first_decode_seconds": 0.136671625,
+      "joined_seconds": null,
+      "language": "rust",
+      "load_seconds": 0.729777625,
+      "native_linkage": "shared",
+      "provider_requested": "cpu",
+      "sample_count": 61521,
+      "sherpa_onnx": "1.13.8",
+      "short_only": true,
+      "text": "Ask not what your country can do for you, ask what you can do for your country.",
+      "threads": 2,
+      "warm_decode_seconds": [
+        0.131690875,
+        0.136073708,
+        0.257393625,
+        0.154261292,
+        0.137895416
+      ],
+      "peak_rss_bytes": 1925300224,
+      "joined_text_repetitions": 0
+    },
+    "python-short": {
+      "language": "python",
+      "short_only": true,
+      "sherpa_onnx": "1.13.8",
+      "provider_requested": "cpu",
+      "threads": 2,
+      "sample_count": 61521,
+      "audio_seconds": 3.8450625,
+      "load_seconds": 0.852110999985598,
+      "first_decode_seconds": 0.1593357080128044,
+      "cold_load_decode_seconds": 1.0114467079984024,
+      "warm_decode_seconds": [
+        0.1532889159861952,
+        0.1526681249961257,
+        0.15145608398597687,
+        0.1605618330067955,
+        0.17011312500108033
+      ],
+      "eight_chunks_seconds": null,
+      "joined_seconds": null,
+      "text": "Ask not what your country can do for you, ask what you can do for your country.",
+      "peak_rss_bytes": 1957675008,
+      "joined_text_repetitions": 0
+    }
+  },
+  "notes": [
+    "Two CPU threads; model load and decode exclude interpreter startup, input preparation, integrity verification, VAD, speakers, capture, IPC, and UI.",
+    "Fresh process and model instance; disk caches potentially warm. No user audio.",
+    "Rust static and Python passes interleaved. Rust shared passes measured later in another quiet CPU window.",
+    "Initial sandbox time outputs lack RSS due denied kernel statistics. Separate unsandboxed time runs supply RSS.",
+    "Different native C API and pybind entry points remain even for the shared-wheel comparison."
+  ]
+}

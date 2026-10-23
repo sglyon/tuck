@@ -1,0 +1,42 @@
+{
+  "name": "tuck",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "desktop": "tauri dev",
+    "desktop:build": "tauri build",
+    "native:setup": "node scripts/prepare-native.mjs",
+    "engine:setup": "npm run native:setup",
+    "engine:test": "cargo test --manifest-path crates/tuck-core/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml --lib",
+    "reference:test": "uv run --project engine python -m unittest discover -s engine/tests -v",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "tsc -b",
+    "sidecar:build": "npm run native:setup"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-opener": "^2.5.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@tauri-apps/cli": "^2.10.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,4 @@
+{"component":"Preprocessor","event":"anticipated_compute_plan","preferred_operation_counts":{"<MLCPUComputeDevice: 0x75f317d830>":51,"unreported":68}}
+{"component":"Encoder","event":"anticipated_compute_plan","preferred_operation_counts":{"<MLCPUComputeDevice: 0x75f317d830>":7,"<MLNeuralEngineComputeDevice: 0x75f317d7d0>":1378,"unreported":2013}}
+{"component":"Decoder","event":"anticipated_compute_plan","preferred_operation_counts":{"<MLCPUComputeDevice: 0x75f317d830>":24,"unreported":43}}
+{"component":"JointDecisionv3","event":"anticipated_compute_plan","preferred_operation_counts":{"<MLCPUComputeDevice: 0x75f317d830>":24,"unreported":39}}

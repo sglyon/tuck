@@ -1,0 +1,4 @@
+{"component":"Preprocessor","event":"anticipated_compute_plan","preferred_operation_counts":{"cpu":51,"unreported":68}}
+{"component":"Encoder_v2","event":"anticipated_compute_plan","preferred_operation_counts":{"cpu":7,"neuralEngine":1378,"unreported":2013}}
+{"component":"Decoder","event":"anticipated_compute_plan","preferred_operation_counts":{"cpu":24,"unreported":43}}
+{"component":"JointDecisionv3","event":"anticipated_compute_plan","preferred_operation_counts":{"cpu":24,"unreported":39}}

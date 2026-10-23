@@ -1,0 +1,52 @@
+[package]
+name = "tuck"
+version = "0.1.0"
+description = "Private meeting workspace"
+authors = ["SGL"]
+edition = "2021"
+default-run = "tuck"
+
+[features]
+diagnostics = []
+
+[[bin]]
+name = "tuck-runtime"
+path = "src/bin/tuck-runtime.rs"
+required-features = ["diagnostics"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
+uuid = { version = "1", features = ["v4"] }
+
+tuck-core = { path = "../crates/tuck-core" }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "form", "query", "rustls"] }
+jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
+keyring = "4.2.0"
+base64 = "0.22"
+sha2 = "0.10"
+getrandom = "0.3"
+constant_time_eq = "0.4"
+url = "2"
+tempfile = "3"
+tiny_http = "0.12"
+webbrowser = "1"
+sherpa-onnx = "=1.13.8"
+cpal = "=0.17.3"
+hound = "3.5.1"
+bzip2 = "0.5"
+tar = "0.4"
+
+chrono = { version = "0.4", features = ["serde"] }
+tauri-plugin-global-shortcut = "2"
+chrono-tz = "0.10"
+libc = "0.2"
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["aac", "flac", "mp3", "isomp4", "pcm", "wav", "id3v2"] }

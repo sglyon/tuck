@@ -1,0 +1,1221 @@
+{
+  "observedAt": "2026-10-23T11:18:08.689Z",
+  "hardware": {
+    "model": "Mac18,5",
+    "chip": "Apple M6",
+    "ramBytes": 34359738368,
+    "os": "27.0.1",
+    "architecture": "arm64"
+  },
+  "scope": "Native diagnostic runtime + shipped Core ML V2 helper; one synthetic system source from public PCM. No UI, actual microphone, system capture, video call, local LLM, or speaker model.",
+  "qualification16GB": false,
+  "requestedSeconds": 180,
+  "actualRecordingSeconds": 180.071,
+  "startupSeconds": 82.967674334,
+  "stopSeconds": 0.07063058400002774,
+  "fixtureSha256": "01ce3dfe8a93bd58c9931e3a0d74c9c92330582455ff517f03e7547f5b510583",
+  "segments": 37,
+  "expectedWordsVerified": true,
+  "errors": 0,
+  "wavBytes": 5708844,
+  "lagSeconds": {
+    "definition": "Segment arrival wall time minus segment audio end, relative to recording start response; includes VAD finalization, buffering and inference, with small start-response timing error.",
+    "count": 37,
+    "median": 1.3429169999999857,
+    "p95": 2.0173005410000258,
+    "max": 2.0973570410000093,
+    "min": 0.5654517499999931
+  },
+  "processes": {
+    "idle": [
+      {
+        "pid": 56895,
+        "parent": 56894,
+        "rssBytes": 14352384,
+        "cpuPercent": 2.3,
+        "cpuTime": "0:00.01",
+        "kind": "rust"
+      }
+    ],
+    "afterStop": [
+      {
+        "pid": 56895,
+        "parent": 56894,
+        "rssBytes": 35028992,
+        "cpuPercent": 0.6,
+        "cpuTime": "0:03.04",
+        "kind": "rust"
+      }
+    ],
+    "rust": {
+      "rssFirstBytes": 31735808,
+      "rssLastBytes": 34816000,
+      "rssPeakBytes": 34816000,
+      "meanReportedPsCpuPercent": 0.9405405405405407,
+      "cpuTimeDeltaSeconds": 1.8900000000000001,
+      "cpuTimeDeltaPercentOfOneCore": 1.0498321904017263
+    },
+    "coreml": {
+      "rssFirstBytes": 56131584,
+      "rssLastBytes": 91226112,
+      "rssPeakBytes": 95584256,
+      "meanReportedPsCpuPercent": 1.4513513513513518,
+      "cpuTimeDeltaSeconds": 2.4699999999999998,
+      "cpuTimeDeltaPercentOfOneCore": 1.372002915498552
+    },
+    "caveat": "RSS is per-process resident mappings and may double-count shared pages. Core ML/ANE/compiler-service allocations outside these processes are excluded; this is not total machine memory or energy."
+  },
+  "samples": [
+    {
+      "elapsedSeconds": 0.0001043329999956768,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 31735808,
+          "cpuPercent": 3,
+          "cpuTime": "0:01.15",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 56131584,
+          "cpuPercent": 13.9,
+          "cpuTime": "0:01.37",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 42713088,
+          "cpuPercent": 13.6,
+          "cpuTime": "0:00.07",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 0,
+      "segments": 0
+    },
+    {
+      "elapsedSeconds": 5.028721250000002,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34029568,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.20",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95354880,
+          "cpuPercent": 2.2,
+          "cpuTime": "0:01.44",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 45973504,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.09",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 160044,
+      "segments": 1
+    },
+    {
+      "elapsedSeconds": 10.071745582999997,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34029568,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:01.25",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95387648,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.51",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 46383104,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.09",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 320044,
+      "segments": 2
+    },
+    {
+      "elapsedSeconds": 15.113559708,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34324480,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.31",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95469568,
+          "cpuPercent": 0.3,
+          "cpuTime": "0:01.59",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 46792704,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.10",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 480044,
+      "segments": 3
+    },
+    {
+      "elapsedSeconds": 20.155823000000005,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.35",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95485952,
+          "cpuPercent": 0.3,
+          "cpuTime": "0:01.66",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 47185920,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.11",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 640044,
+      "segments": 4
+    },
+    {
+      "elapsedSeconds": 25.197095166,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.40",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95518720,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:01.73",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 47661056,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.12",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 800044,
+      "segments": 5
+    },
+    {
+      "elapsedSeconds": 30.237606625,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.46",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95535104,
+          "cpuPercent": 0,
+          "cpuTime": "0:01.80",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 48152576,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.13",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 960044,
+      "segments": 6
+    },
+    {
+      "elapsedSeconds": 35.280849625,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.51",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95567872,
+          "cpuPercent": 0,
+          "cpuTime": "0:01.87",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 48578560,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.14",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1116844,
+      "segments": 7
+    },
+    {
+      "elapsedSeconds": 40.31903275,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.56",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 95584256,
+          "cpuPercent": 0,
+          "cpuTime": "0:01.94",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 48971776,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.14",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1276844,
+      "segments": 8
+    },
+    {
+      "elapsedSeconds": 45.360988750000004,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.61",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89063424,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.02",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 49610752,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.15",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1436844,
+      "segments": 9
+    },
+    {
+      "elapsedSeconds": 50.402386166000014,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:01.67",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89030656,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.09",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 50200576,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.16",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1596844,
+      "segments": 10
+    },
+    {
+      "elapsedSeconds": 55.44188112499999,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.72",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.16",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51838976,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.17",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1756844,
+      "segments": 11
+    },
+    {
+      "elapsedSeconds": 60.484436208,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:01.78",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.23",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.18",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 1916844,
+      "segments": 12
+    },
+    {
+      "elapsedSeconds": 65.524673958,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.9,
+          "cpuTime": "0:01.83",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 88965120,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.31",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.18",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2076844,
+      "segments": 13
+    },
+    {
+      "elapsedSeconds": 70.567095416,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.2,
+          "cpuTime": "0:01.88",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.38",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.19",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2236844,
+      "segments": 14
+    },
+    {
+      "elapsedSeconds": 75.61017908299999,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.94",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 88981504,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.45",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.20",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2396844,
+      "segments": 15
+    },
+    {
+      "elapsedSeconds": 80.65307704100002,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:01.99",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89030656,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.53",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.20",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2556844,
+      "segments": 16
+    },
+    {
+      "elapsedSeconds": 85.69460441599999,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:02.04",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89096192,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.60",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.21",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2716844,
+      "segments": 17
+    },
+    {
+      "elapsedSeconds": 90.731395333,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:02.10",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 88981504,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.68",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.21",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 2876844,
+      "segments": 18
+    },
+    {
+      "elapsedSeconds": 95.772008375,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:02.15",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 88997888,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.75",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51249152,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.22",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3036844,
+      "segments": 19
+    },
+    {
+      "elapsedSeconds": 100.81331337499999,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.2,
+          "cpuTime": "0:02.21",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 88997888,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.82",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51265536,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.23",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3196844,
+      "segments": 20
+    },
+    {
+      "elapsedSeconds": 105.85317933300001,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:02.25",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.87",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51445760,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.23",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3356844,
+      "segments": 21
+    },
+    {
+      "elapsedSeconds": 110.89290599999998,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:02.30",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89030656,
+          "cpuPercent": 0,
+          "cpuTime": "0:02.94",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 51855360,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.24",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3516844,
+      "segments": 22
+    },
+    {
+      "elapsedSeconds": 115.91692387500001,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.9,
+          "cpuTime": "0:02.36",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89030656,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.01",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 52232192,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.24",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3676844,
+      "segments": 23
+    },
+    {
+      "elapsedSeconds": 120.95673616599998,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1,
+          "cpuTime": "0:02.41",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.09",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 52641792,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.25",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3836844,
+      "segments": 24
+    },
+    {
+      "elapsedSeconds": 125.99908466600002,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:02.47",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 89014272,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.16",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 53051392,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.26",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 3996844,
+      "segments": 25
+    },
+    {
+      "elapsedSeconds": 131.041295958,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:02.52",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91242496,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.19",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 53460992,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.26",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4156844,
+      "segments": 26
+    },
+    {
+      "elapsedSeconds": 136.082811833,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1,
+          "cpuTime": "0:02.57",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91242496,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.26",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 53854208,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.27",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4316844,
+      "segments": 27
+    },
+    {
+      "elapsedSeconds": 141.123755041,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1,
+          "cpuTime": "0:02.63",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91193344,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.33",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 54247424,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.28",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4476844,
+      "segments": 28
+    },
+    {
+      "elapsedSeconds": 146.16617324999999,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.4,
+          "cpuTime": "0:02.69",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91226112,
+          "cpuPercent": 3.5,
+          "cpuTime": "0:03.47",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 54657024,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.28",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4633644,
+      "segments": 30
+    },
+    {
+      "elapsedSeconds": 151.189831875,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1,
+          "cpuTime": "0:02.74",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91209728,
+          "cpuPercent": 19.1,
+          "cpuTime": "0:03.54",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55050240,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.29",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4793644,
+      "segments": 31
+    },
+    {
+      "elapsedSeconds": 156.228615041,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:02.80",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91226112,
+          "cpuPercent": 7.7,
+          "cpuTime": "0:03.61",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55590912,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.30",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 4953644,
+      "segments": 32
+    },
+    {
+      "elapsedSeconds": 161.272164791,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34734080,
+          "cpuPercent": 0.8,
+          "cpuTime": "0:02.85",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91209728,
+          "cpuPercent": 2.2,
+          "cpuTime": "0:03.65",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55607296,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.30",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 5113644,
+      "segments": 33
+    },
+    {
+      "elapsedSeconds": 166.315201833,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34750464,
+          "cpuPercent": 0.5,
+          "cpuTime": "0:02.90",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91209728,
+          "cpuPercent": 2.5,
+          "cpuTime": "0:03.72",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55640064,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.31",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 5273644,
+      "segments": 34
+    },
+    {
+      "elapsedSeconds": 171.356322416,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34750464,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:02.96",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91226112,
+          "cpuPercent": 1,
+          "cpuTime": "0:03.79",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55656448,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.31",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 5433644,
+      "segments": 35
+    },
+    {
+      "elapsedSeconds": 176.40037125,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34816000,
+          "cpuPercent": 1.1,
+          "cpuTime": "0:03.01",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91226112,
+          "cpuPercent": 0.2,
+          "cpuTime": "0:03.84",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55689216,
+          "cpuPercent": 0.1,
+          "cpuTime": "0:00.32",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 5593644,
+      "segments": 36
+    },
+    {
+      "elapsedSeconds": 180.028876291,
+      "processes": [
+        {
+          "pid": 56895,
+          "parent": 56894,
+          "rssBytes": 34816000,
+          "cpuPercent": 0.7,
+          "cpuTime": "0:03.04",
+          "kind": "rust"
+        },
+        {
+          "pid": 56961,
+          "parent": 56895,
+          "rssBytes": 91226112,
+          "cpuPercent": 0,
+          "cpuTime": "0:03.84",
+          "kind": "coreml"
+        },
+        {
+          "pid": 57194,
+          "parent": 56895,
+          "rssBytes": 55705600,
+          "cpuPercent": 0,
+          "cpuTime": "0:00.32",
+          "kind": "syntheticSource"
+        }
+      ],
+      "wavBytes": 5708844,
+      "segments": 36
+    }
+  ],
+  "engineSha256": "acbcd0da690d91a78973005c6eb4464d9f891629418bebbb58c43010ab62b4f6",
+  "speechHelperSha256": "3c07ed2cdf3c29a55544b141570a7294a5ddd1c8921d8fecaeb11e0223716818",
+  "startupCaveat": "A new temporary symlink alias to existing model files was used; this process paid about83seconds of model startup/preparation. Cache-path sensitivity was not isolated. This is not a warm-start measurement.",
+  "concurrentHostActivity": "Native UI acceptance work was running on the same development host; its process memory is excluded."
+}

@@ -1,0 +1,32 @@
+{
+  "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
+  "bundleBytes": 61471150,
+  "mainExecutableSha256": "b4af4ebc3fbf5d4f4bbbcb64baeee1f90fc2724f2649023e3f93b79286004932",
+  "pythonFiles": [],
+  "licensePresent": true,
+  "coreTestsPassed": 44,
+  "nativeLibraryTestsPassed": 72,
+  "nativeLibraryTestsIgnored": 2,
+  "desktopLifecycleTestsPassed": 2,
+  "uiUnitTestsPassed": 6,
+  "uiE2ETestsPassed": 23,
+  "finalNativePlaybackVerified": true,
+  "minimum16GBRealCallQualified": false,
+  "nativeAcceptanceVerifiedAt": "2026-10-23T14:25:44.851355+00:00",
+  "nativeAcceptanceChecks": [
+    "final bundle relaunched; neutral recap footer visible",
+    "public retained audio loaded paused with real duration",
+    "native playback advanced to end",
+    "paused seek and resume advanced from selected position",
+    "File Record a meeting routes unprepared setup without recording",
+    "Privacy backup and restore entry points visible",
+    "verification note saved across immediate window hide and reopen"
+  ],
+  "nativeAcceptanceLimits": [
+    "no audible output assertion",
+    "no microphone or system capture",
+    "no external account or calendar access",
+    "no long-file playback qualification",
+    "OS global shortcut not hardware-qualified"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "observedAt": "2026-10-23T11:23:01.487Z",
+  "engineSha256": "9eb9f6894169a36760a02730eaa9fc10d6cf45902727c89c3cd73745487a1f03",
+  "speechHelperSha256": "3c07ed2cdf3c29a55544b141570a7294a5ddd1c8921d8fecaeb11e0223716818",
+  "canonicalModelDirectory": "/private/tmp/tuck-rust-coreml-models/parakeet-v3-coreml",
+  "prepareSeconds": 0.19951591700000001,
+  "aliasCases": [
+    {
+      "alias": "/var/folders/vw/y9kp8c9x48z8_789v0nzn9gc0000gn/T/tuck-warm-aliases-he458k/first",
+      "physicalModelDirectory": "/private/tmp/tuck-rust-coreml-models/parakeet-v3-coreml",
+      "startupSeconds": 1.4004613750000003,
+      "actualRecordingSeconds": 15.067,
+      "segments": 3,
+      "expectedWordsVerified": true,
+      "errors": 0,
+      "stopSeconds": 0.045450582999998004,
+      "lagSeconds": {
+        "definition": "Segment arrival wall time minus segment audio end, relative to recording start response; includes VAD finalization, buffering and inference, with small start-response timing error.",
+        "count": 3,
+        "median": 0.745266333,
+        "p95": 0.745266333,
+        "max": 0.7855458749999986,
+        "min": 0.594496833
+      }
+    },
+    {
+      "alias": "/var/folders/vw/y9kp8c9x48z8_789v0nzn9gc0000gn/T/tuck-warm-aliases-he458k/second",
+      "physicalModelDirectory": "/private/tmp/tuck-rust-coreml-models/parakeet-v3-coreml",
+      "startupSeconds": 1.4497289999999998,
+      "actualRecordingSeconds": 15.102,
+      "segments": 4,
+      "expectedWordsVerified": true,
+      "errors": 0,
+      "stopSeconds": 0.08815562499999942,
+      "lagSeconds": {
+        "definition": "Segment arrival wall time minus segment audio end, relative to recording start response; includes VAD finalization, buffering and inference, with small start-response timing error.",
+        "count": 4,
+        "median": 0.5602343750000003,
+        "p95": 0.6832648329999991,
+        "max": 0.7025748329999999,
+        "min": 0.2784161249999997
+      }
+    }
+  ],
+  "samePhysicalModels": true,
+  "warmStartupUnderTenSeconds": true,
+  "qualification16GB": false,
+  "caveat": "Two observed prepared starts through new aliases, not a guarantee of persistent OS caches. Public synthetic system source only; no actual video call, user audio, GUI, speaker model or local LLM.",
+  "hardware": {
+    "model": "Mac18,5",
+    "chip": "Apple M6",
+    "ramBytes": 34359738368,
+    "os": "27.0.1",
+    "architecture": "arm64"
+  }
+}

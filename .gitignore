@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.DS_Store
+engine/.venv/
+**/__pycache__/
+*.pyc
+src-tauri/target/
+src-tauri/binaries/
+engine/build/
+engine/dist/
+*.spec
+.impeccable/review/
+playwright-report/
+test-results/
+.env*
+!.env.example
+*.tsbuildinfo

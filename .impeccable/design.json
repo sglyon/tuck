@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T04:29:46.798482+00:00",
+  "title": "Design System: Tuck",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.15988 270.33)",
+          "oklch(26.43% 0.15988 270.33)",
+          "oklch(37.86% 0.15988 270.33)",
+          "oklch(49.29% 0.15988 270.33)",
+          "oklch(60.71% 0.15988 270.33)",
+          "oklch(72.14% 0.15988 270.33)",
+          "oklch(83.57% 0.15988 270.33)",
+          "oklch(95.00% 0.15988 270.33)"
+        ]
+      },
+      "accent-dark": {
+        "role": "primary",
+        "displayName": "Accent Dark",
+        "tonalRamp": [
+          "oklch(15.00% 0.15112 270.55)",
+          "oklch(26.43% 0.15112 270.55)",
+          "oklch(37.86% 0.15112 270.55)",
+          "oklch(49.29% 0.15112 270.55)",
+          "oklch(60.71% 0.15112 270.55)",
+          "oklch(72.14% 0.15112 270.55)",
+          "oklch(83.57% 0.15112 270.55)",
+          "oklch(95.00% 0.15112 270.55)"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Accent Soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.02460 275.91)",
+          "oklch(26.43% 0.02460 275.91)",
+          "oklch(37.86% 0.02460 275.91)",
+          "oklch(49.29% 0.02460 275.91)",
+          "oklch(60.71% 0.02460 275.91)",
+          "oklch(72.14% 0.02460 275.91)",
+          "oklch(83.57% 0.02460 275.91)",
+          "oklch(95.00% 0.02460 275.91)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "shell": {
+        "role": "neutral",
+        "displayName": "Shell",
+        "tonalRamp": [
+          "oklch(15.00% 0.00413 271.37)",
+          "oklch(26.43% 0.00413 271.37)",
+          "oklch(37.86% 0.00413 271.37)",
+          "oklch(49.29% 0.00413 271.37)",
+          "oklch(60.71% 0.00413 271.37)",
+          "oklch(72.14% 0.00413 271.37)",
+          "oklch(83.57% 0.00413 271.37)",
+          "oklch(95.00% 0.00413 271.37)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar",
+        "tonalRamp": [
+          "oklch(15.00% 0.00702 268.55)",
+          "oklch(26.43% 0.00702 268.55)",
+          "oklch(37.86% 0.00702 268.55)",
+          "oklch(49.29% 0.00702 268.55)",
+          "oklch(60.71% 0.00702 268.55)",
+          "oklch(72.14% 0.00702 268.55)",
+          "oklch(83.57% 0.00702 268.55)",
+          "oklch(95.00% 0.00702 268.55)"
+        ]
+      },
+      "assistant": {
+        "role": "neutral",
+        "displayName": "Assistant",
+        "tonalRamp": [
+          "oklch(15.00% 0.00412 271.37)",
+          "oklch(26.43% 0.00412 271.37)",
+          "oklch(37.86% 0.00412 271.37)",
+          "oklch(49.29% 0.00412 271.37)",
+          "oklch(60.71% 0.00412 271.37)",
+          "oklch(72.14% 0.00412 271.37)",
+          "oklch(83.57% 0.00412 271.37)",
+          "oklch(95.00% 0.00412 271.37)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.02290 267.27)",
+          "oklch(26.43% 0.02290 267.27)",
+          "oklch(37.86% 0.02290 267.27)",
+          "oklch(49.29% 0.02290 267.27)",
+          "oklch(60.71% 0.02290 267.27)",
+          "oklch(72.14% 0.02290 267.27)",
+          "oklch(83.57% 0.02290 267.27)",
+          "oklch(95.00% 0.02290 267.27)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.03835 262.50)",
+          "oklch(26.43% 0.03835 262.50)",
+          "oklch(37.86% 0.03835 262.50)",
+          "oklch(49.29% 0.03835 262.50)",
+          "oklch(60.71% 0.03835 262.50)",
+          "oklch(72.14% 0.03835 262.50)",
+          "oklch(83.57% 0.03835 262.50)",
+          "oklch(95.00% 0.03835 262.50)"
+        ]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint",
+        "tonalRamp": [
+          "oklch(15.00% 0.03762 262.53)",
+          "oklch(26.43% 0.03762 262.53)",
+          "oklch(37.86% 0.03762 262.53)",
+          "oklch(49.29% 0.03762 262.53)",
+          "oklch(60.71% 0.03762 262.53)",
+          "oklch(72.14% 0.03762 262.53)",
+          "oklch(83.57% 0.03762 262.53)",
+          "oklch(95.00% 0.03762 262.53)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "tonalRamp": [
+          "oklch(15.00% 0.00871 264.52)",
+          "oklch(26.43% 0.00871 264.52)",
+          "oklch(37.86% 0.00871 264.52)",
+          "oklch(49.29% 0.00871 264.52)",
+          "oklch(60.71% 0.00871 264.52)",
+          "oklch(72.14% 0.00871 264.52)",
+          "oklch(83.57% 0.00871 264.52)",
+          "oklch(95.00% 0.00871 264.52)"
+        ]
+      },
+      "green": {
+        "role": "status",
+        "displayName": "Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.08773 166.03)",
+          "oklch(26.43% 0.08773 166.03)",
+          "oklch(37.86% 0.08773 166.03)",
+          "oklch(49.29% 0.08773 166.03)",
+          "oklch(60.71% 0.08773 166.03)",
+          "oklch(72.14% 0.08773 166.03)",
+          "oklch(83.57% 0.08773 166.03)",
+          "oklch(95.00% 0.08773 166.03)"
+        ]
+      },
+      "red": {
+        "role": "status",
+        "displayName": "Red",
+        "tonalRamp": [
+          "oklch(15.00% 0.13345 17.36)",
+          "oklch(26.43% 0.13345 17.36)",
+          "oklch(37.86% 0.13345 17.36)",
+          "oklch(49.29% 0.13345 17.36)",
+          "oklch(60.71% 0.13345 17.36)",
+          "oklch(72.14% 0.13345 17.36)",
+          "oklch(83.57% 0.13345 17.36)",
+          "oklch(95.00% 0.13345 17.36)"
+        ]
+      },
+      "supporting-strong": {
+        "role": "neutral",
+        "displayName": "Supporting Strong",
+        "tonalRamp": [
+          "oklch(15.00% 0.04239 261.13)",
+          "oklch(26.43% 0.04239 261.13)",
+          "oklch(37.86% 0.04239 261.13)",
+          "oklch(49.29% 0.04239 261.13)",
+          "oklch(60.71% 0.04239 261.13)",
+          "oklch(72.14% 0.04239 261.13)",
+          "oklch(83.57% 0.04239 261.13)",
+          "oklch(95.00% 0.04239 261.13)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Meeting title",
+        "purpose": "Editable document heading."
+      },
+      "body": {
+        "displayName": "Reading prose",
+        "purpose": "Recap and transcript at a 75ch maximum measure."
+      },
+      "label": {
+        "displayName": "Control label",
+        "purpose": "Main controls and navigation."
+      },
+      "supporting": {
+        "displayName": "Supporting text",
+        "purpose": "Functional timestamps, source labels, readiness and shortcuts."
+      }
+    },
+    "shadows": [
+      {
+        "name": "popover",
+        "value": "0 8px 30px #25385d26",
+        "purpose": "Floating menus."
+      },
+      {
+        "name": "notification",
+        "value": "0 5px 22px #23365424",
+        "purpose": "Transient and error notifications."
+      },
+      {
+        "name": "dialog",
+        "value": "0 12px 55px #1a2a4f26",
+        "purpose": "Modal dialogs with an ink-wash backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "background 0.16s, color 0.16s, border-color 0.16s",
+        "purpose": "Button state changes; disabled under reduced motion."
+      },
+      {
+        "name": "switch-state",
+        "value": "background 0.18s, transform 0.18s",
+        "purpose": "Switch track/knob state; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "700px"
+      },
+      {
+        "name": "two-pane",
+        "value": "980px"
+      },
+      {
+        "name": "narrow-desktop",
+        "value": "1190px"
+      },
+      {
+        "name": "wide-desktop",
+        "value": "1550px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action in the implemented desktop control scale.",
+      "html": "<button class=\"ds-button-primary\">Start a meeting</button>",
+      "css": ".ds-button-primary{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:9px 13px;border-radius:6px;line-height:1.3;font-weight:550;white-space:nowrap;border:0;cursor:pointer;transition:background .16s,color .16s,border-color .16s;background:var(--accent,#4d65cb);color:#fff;}.ds-button-primary:hover:not(:disabled){background:var(--accent-dark,#3d51af);}.ds-button-primary:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-button-primary:disabled{cursor:not-allowed;opacity:.46}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none}}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary action in the implemented desktop control scale.",
+      "html": "<button class=\"ds-button-secondary\">Load models</button>",
+      "css": ".ds-button-secondary{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:9px 13px;border-radius:6px;line-height:1.3;font-weight:550;white-space:nowrap;border:0;cursor:pointer;transition:background .16s,color .16s,border-color .16s;background:#fff;color:#596780;border:1px solid #dce2ed;}.ds-button-secondary:hover:not(:disabled){background:#f3f5fc;border-color:#bcc7e3;}.ds-button-secondary:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-button-secondary:disabled{cursor:not-allowed;opacity:.46}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none}}"
+    },
+    {
+      "name": "Subtle action",
+      "kind": "button",
+      "refersTo": "button-subtle",
+      "description": "Subtle action in the implemented desktop control scale.",
+      "html": "<button class=\"ds-button-subtle\">Update recap</button>",
+      "css": ".ds-button-subtle{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:9px 13px;border-radius:6px;line-height:1.3;font-weight:550;white-space:nowrap;border:0;cursor:pointer;transition:background .16s,color .16s,border-color .16s;background:#f2f4fb;color:#5464a4;}.ds-button-subtle:hover:not(:disabled){background:#e8ecfa;}.ds-button-subtle:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-button-subtle:disabled{cursor:not-allowed;opacity:.46}@media(prefers-reduced-motion:reduce){.ds-button-subtle{transition:none}}"
+    },
+    {
+      "name": "Destructive action",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive action in the implemented desktop control scale.",
+      "html": "<button class=\"ds-button-danger\">Delete conversation</button>",
+      "css": ".ds-button-danger{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:9px 13px;border-radius:6px;line-height:1.3;font-weight:550;white-space:nowrap;border:0;cursor:pointer;transition:background .16s,color .16s,border-color .16s;background:#b34f5c;color:#fff;}.ds-button-danger:hover:not(:disabled){background:#983d49;}.ds-button-danger:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-button-danger:disabled{cursor:not-allowed;opacity:.46}@media(prefers-reduced-motion:reduce){.ds-button-danger{transition:none}}"
+    },
+    {
+      "name": "Settings input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A white bordered field used within an advanced connection or model group.",
+      "html": "<input class=\"ds-input\" aria-label=\"Model name\" placeholder=\"Model name\">",
+      "css": ".ds-input{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;min-width:0;border:1px solid #dfe5f0;border-radius:5px;padding:9px 11px;font-size:12px;background:#fff;color:#5e6c88}.ds-input::placeholder{color:#606878;opacity:1}.ds-input:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-input:hover{border-color:#bcc7e3}"
+    },
+    {
+      "name": "Library navigation",
+      "kind": "nav",
+      "refersTo": "library-navigation",
+      "description": "Flat library filters with active wash and a tabular count.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Library filters\"><button aria-current=\"page\">All conversations <span>1</span></button><button>Starred</button></nav>",
+      "css": ".ds-nav{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;width:200px}.ds-nav button{display:flex;gap:9px;width:100%;padding:10px 9px;font:inherit;text-align:left;border:0;border-radius:5px;color:#606b80;background:transparent;cursor:pointer}.ds-nav button[aria-current]{background:#e3e8f7;color:#3e54ad;font-weight:600}.ds-nav button:hover:not([aria-current]){background:#e9ecf3}.ds-nav button:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}.ds-nav span{margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Provider choice",
+      "kind": "card",
+      "refersTo": "provider-choice",
+      "description": "An operable provider selection card; configuration detail stays below.",
+      "html": "<button class=\"ds-provider\" aria-pressed=\"true\"><strong>On this device</strong><small>Private, with Ollama</small></button>",
+      "css": ".ds-provider{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:14px 11px;border:1px solid #e3e7f0;border-radius:7px;color:#5f6878;background:#fff;cursor:pointer;text-align:left}.ds-provider strong{font-size:13px;font-weight:600;color:#56627b}.ds-provider small{font-size:11px;line-height:1.5;color:#606874}.ds-provider[aria-pressed=true]{background:#f1f4ff;border-color:#bac8ed;color:#5166a3}.ds-provider[aria-pressed=true] strong{color:#4c64aa}.ds-provider:hover{border-color:#b6c3e7}.ds-provider:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}"
+    },
+    {
+      "name": "Transcript citation",
+      "kind": "chip",
+      "refersTo": "citation",
+      "description": "A compact inline source navigation control; factual grounding remains a content responsibility.",
+      "html": "<button class=\"ds-citation\" aria-label=\"Go to transcript at 16 seconds\">00:16</button>",
+      "css": ".ds-citation{font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;font-size:13px;display:inline-flex;vertical-align:baseline;align-items:center;color:#53669d;background:#edf1fb;padding:0 4px;font-size:10px;border-radius:3px;line-height:1.7;margin:0 1px;font-variant-numeric:tabular-nums;border:0;cursor:pointer}.ds-citation:hover{background:#dde5fa;color:#40569e}.ds-citation:focus-visible{outline:2px solid var(--accent,#4d65cb);outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cool Porcelain Meeting Desk",
+    "overview": "Tuck is a meeting desk: a library, a document, and an assistant beside the conversation. Cool porcelain surfaces, flat seams, ink text, and cornflower actions give busy professionals a quiet place to capture a call and recover its evidence. System typography and familiar controls make the work readable before exposing model or connection details.",
+    "keyCharacteristics": [
+      "Flat split panes with independent scrolling.",
+      "Reading-first document hierarchy and restrained functional color.",
+      "Timestamp citations return to spoken evidence.",
+      "Plain-language setup with engineering details disclosed progressively."
+    ],
+    "rules": [
+      {
+        "name": "Functional Accent",
+        "body": "Reserve cornflower for actions, selection, focus, and source navigation; use text and icons alongside status colors.",
+        "section": "colors"
+      },
+      {
+        "name": "Readable Supporting Text",
+        "body": "Preserve the final cascade: functional timestamp/source labels are 12px, context/tab counts are 11px, and model-readiness/shortcut text is 12px in the final dark blue gray. Small supplementary metadata remains a review limitation, not a new default.",
+        "section": "typography"
+      },
+      {
+        "name": "Seams Before Shadows",
+        "body": "Separate persistent panes through background tones and one-pixel seams; reserve shadows for floating menus, notifications, and dialogs.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the library, document, and assistant hierarchy legible at every breakpoint.",
+      "Do keep essential supporting text readable against its actual surface and preserve the final functional microtext overrides.",
+      "Do show saving, failure, retry, capture, and processing states truthfully.",
+      "Do disclose hosted transcript processing beside the recap action and assistant composer.",
+      "Do retain pending notes, ordered writes, and close protection when changing the editor."
+    ],
+    "donts": [
+      "Don't treat example content, a configured provider label, or a navigable timestamp as proof of live inference or factual grounding.",
+      "Don't expose raw model IDs, CPU controls, connection URLs, or audio backend names as basic setup choices.",
+      "Don't replace flat pane seams with a dashboard of floating cards or decorative shadows.",
+      "Don't infer native capture, hardware performance, or hosted-service reliability from browser screenshots."
+    ]
+  }
+}

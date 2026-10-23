@@ -1,0 +1,29 @@
+diff --git a/Package@swift-6.2.swift b/Package@swift-6.2.swift
+index 5d04a1f..5324857 100644
+--- a/Package@swift-6.2.swift
++++ b/Package@swift-6.2.swift
+@@ -46,10 +46,7 @@ let package = Package(
+                 "FastClusterWrapper",
+                 "MachTaskSelfWrapper",
+                 // The prebuilt xcframework has no visionOS slice.
+-                .target(
+-                    name: "NemoTextProcessing",
+-                    condition: .when(platforms: [.macOS, .iOS, .macCatalyst], traits: ["NemoTextProcessing"])
+-                ),
++
+             ],
+             path: "Sources/FluidAudio",
+             exclude: ["ASR/Parakeet/Unified/benchmark.md"],
+@@ -61,12 +58,6 @@ let package = Package(
+         // Byte-exact NeMo text normalization (FST engine, all 7 languages).
+         // Prebuilt xcframework from FluidInference/text-processing-rs v0.3.1
+         // (macOS, iOS, iOS Simulator and Mac Catalyst slices).
+-        .binaryTarget(
+-            name: "NemoTextProcessing",
+-            url:
+-                "https://github.com/FluidInference/text-processing-rs/releases/download/v0.3.1/NemoTextProcessing.xcframework.zip",
+-            checksum: "5fa8c10d4ec26c1bb2413125f351a7222a4c68a23b74476680fbada7e26fc6aa"
+-        ),
+         .target(
+             name: "FastClusterWrapper",
+             path: "Sources/FastClusterWrapper",

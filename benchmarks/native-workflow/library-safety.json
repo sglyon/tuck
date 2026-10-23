@@ -1,0 +1,21 @@
+{
+  "verifiedAt": "2026-10-23T13:07:33.288Z",
+  "engineSha256": "50c569e552dbe12a256ea0c2c6c924f82c7f3caf7dd100650c3085f410690ed4",
+  "requests": 131,
+  "realParakeet": true,
+  "checks": [
+    "immutable original speech with guarded correction/reset",
+    "correction-aware source retrieval",
+    "scoped local playback URL and traversal rejection",
+    "new linked recovery workspace; original audio unchanged",
+    "portable backup with note and recap history",
+    "preview fingerprint conflict before writes",
+    "complete ZIP restore with owned audio",
+    "idempotent repeat preserving existing edits",
+    "safe restored preferences"
+  ],
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "calendarContentsAccess": false,
+  "externalProviderAccess": false
+}

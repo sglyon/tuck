@@ -1,0 +1,17 @@
+{
+  "code": 0,
+  "results": [
+    {
+      "fixture": "B",
+      "duration": 15,
+      "expected_phrase_present": true,
+      "known_corruption_present": false
+    },
+    {
+      "fixture": "C",
+      "duration": 11,
+      "expected_phrase_present": true,
+      "known_corruption_present": false
+    }
+  ]
+}

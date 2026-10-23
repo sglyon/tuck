@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-10-23T13:08:39.503Z",
+  "engineSha256": "50c569e552dbe12a256ea0c2c6c924f82c7f3caf7dd100650c3085f410690ed4",
+  "requests": 24,
+  "checks": [
+    "meeting metadata and durable action lifecycle",
+    "bounded scoped evidence with genuine source types",
+    "reviewed proposal, stale-edit rejection and prior-text history",
+    "custom templates and saved recipes",
+    "calendar metadata and non-recording native preflight",
+    "native atomic JSON export",
+    "complete process restart persistence"
+  ],
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "calendarContentsAccess": false,
+  "externalProviderAccess": false
+}

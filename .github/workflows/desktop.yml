@@ -1,0 +1,33 @@
+name: Build desktop packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundle: app
+          - os: windows-latest
+            bundle: nsis
+          - os: ubuntu-latest
+            bundle: deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev librsvg2-dev libayatana-appindicator3-dev patchelf libasound2-dev libdbus-1-dev pulseaudio-utils
+      - run: npm ci
+      - run: npm run native:setup
+      - run: npm run desktop:build -- --bundles ${{ matrix.bundle }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tuck-${{ runner.os }}-unsigned
+          path: src-tauri/target/release/bundle/
+          retention-days: 7

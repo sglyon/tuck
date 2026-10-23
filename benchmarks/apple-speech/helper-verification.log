@@ -1,0 +1,11 @@
+Helper ready.
+Split frame verified.
+First coalesced frame verified.
+Second coalesced frame verified.
+Helper ready.
+Helper ready.
+Helper ready.
+Helper ready.
+Helper ready.
+Helper ready.
+Apple speech helper verified: real transcript, split/coalesced frames, ordered requests, shutdown, bounds, invalid floats, truncated PCM, oversized headers, and local-only missing-model failure.

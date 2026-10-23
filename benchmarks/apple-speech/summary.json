@@ -1,0 +1,42 @@
+{
+  "ane-first": {
+    "model_load_wall_seconds": 60.173342917,
+    "model_load_cpu_seconds": 2.48815,
+    "first_decode_wall_seconds": 0.050583292,
+    "warm_decode_wall_median_seconds": 0.037063666,
+    "warm_decode_cpu_median_seconds": 0.03385399999999983,
+    "warm_process_rss_bytes": 98828288,
+    "peak_process_rss_bytes": 521863168,
+    "peak_process_physical_footprint_bytes": 66405360
+  },
+  "ane-cached": {
+    "model_load_wall_seconds": 0.087113167,
+    "model_load_cpu_seconds": 0.06617500000000001,
+    "first_decode_wall_seconds": 0.042505083,
+    "warm_decode_wall_median_seconds": 0.032330125,
+    "warm_decode_cpu_median_seconds": 0.027986999999999984,
+    "warm_process_rss_bytes": 80658432,
+    "peak_process_rss_bytes": 80691200,
+    "peak_process_physical_footprint_bytes": 40436408
+  },
+  "cpu-first": {
+    "model_load_wall_seconds": 0.576629375,
+    "model_load_cpu_seconds": 0.470976,
+    "first_decode_wall_seconds": 0.226355833,
+    "warm_decode_wall_median_seconds": 0.190211791,
+    "warm_decode_cpu_median_seconds": 0.2249270000000001,
+    "warm_process_rss_bytes": 708116480,
+    "peak_process_rss_bytes": 1050427392,
+    "peak_process_physical_footprint_bytes": 89588912
+  },
+  "cpu-cached": {
+    "model_load_wall_seconds": 0.0165085,
+    "model_load_cpu_seconds": 0.014568000000000001,
+    "first_decode_wall_seconds": 0.223044041,
+    "warm_decode_wall_median_seconds": 0.173508791,
+    "warm_decode_cpu_median_seconds": 0.207048,
+    "warm_process_rss_bytes": 668893184,
+    "peak_process_rss_bytes": 668893184,
+    "peak_process_physical_footprint_bytes": 74400896
+  }
+}
