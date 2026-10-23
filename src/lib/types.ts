@@ -36,6 +36,32 @@ export interface ActionItem {
   done: boolean;
   createdAt: string;
 }
+export interface CoachSuggestion {
+  id: string;
+  kind: "question" | "follow_up" | "reminder" | "insight";
+  agentId: string;
+  agentName: string;
+  quote: string;
+  text: string;
+  segmentId: string;
+  start: number;
+  createdAt: string;
+  status: "open" | "dismissed" | "saved";
+  taskId?: string | null;
+}
+export interface LiveCoachState {
+  enabled: boolean;
+  selectedAgentIds: string[];
+  status: "off" | "waiting" | "analyzing" | "paused" | "unavailable" | "stopped";
+  message?: string | null;
+  suggestions: CoachSuggestion[];
+}
+export interface MeetingAgent {
+  id: string;
+  name: string;
+  instructions: string;
+  pace: "quiet" | "active";
+}
 export interface CalendarEvent {
   id: string;
   source: string;
@@ -114,6 +140,7 @@ export interface Meeting {
   recoveredFrom?: string | null;
 }
 export interface Settings {
+  meetingAgents?: MeetingAgent[];
   provider: "local" | "chatgpt" | "openai";
   model: string;
   localUrl: string;

@@ -50,6 +50,7 @@ import {
 import { useLibraryIndex } from "./lib/useLibraryIndex";
 import { meetingHeader, pruneDetails } from "./lib/library";
 import Settings from "./components/Settings";
+import LiveCoach from "./components/LiveCoach";
 import {
   RetainedAudio,
   TranscriptCorrection,
@@ -2740,6 +2741,7 @@ export default function App() {
               <span className="context-count">{meeting.segments.length}</span>
             )}
           </div>
+          {meeting && !meeting.isExample && <LiveCoach key={meeting.id} meeting={meeting} settings={settings} onMeeting={merge} onSource={jump} onSettings={() => { setSettingsSection("Intelligence"); setView("settings"); setPane("document"); }} />}
           <div className="assistant-messages">
             {(!meeting || !meeting.messages.length) &&
               !(stream && meeting && stream.meetingId === meeting.id) && (

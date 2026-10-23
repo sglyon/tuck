@@ -21,6 +21,7 @@ import {
 import BackupRestore from "./BackupRestore";
 import NotionConnection from "./NotionConnection";
 import SavedWriting from "./SavedWriting";
+import MeetingAgents from "./MeetingAgents";
 import DesktopControls from "./DesktopControls";
 import { call, native, openExternal } from "../lib/bridge";
 import type {
@@ -431,7 +432,7 @@ export default function Settings({
             {s.provider !== "local" && (
               <SettingRow
                 title="Allow hosted transcript processing"
-                description="Your transcript and notes are sent to OpenAI when you ask a question or generate a summary. Audio stays local."
+                description="Your transcript and notes go to OpenAI when you ask or generate a recap. Coaching sends recent transcript excerpts, selected agent instructions and earlier tips while enabled. Audio stays local."
               >
                 <Toggle
                   label="Allow hosted transcript processing"
@@ -533,6 +534,7 @@ export default function Settings({
                 </div>
               </details>
             </div>
+            <MeetingAgents agents={s.meetingAgents || []} onUpdate={onUpdate} />
             <SettingRow
               title="Create a recap when a meeting ends"
               description="Automatically create a recap with the provider selected above."

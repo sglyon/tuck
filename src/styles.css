@@ -1342,6 +1342,52 @@ kbd {
 .assistant-welcome {
   padding-top: 64px;
 }
+.live-coach {
+  border-bottom: 1px solid var(--line);
+  padding: 2px 22px 20px;
+  margin-bottom: 12px;
+  color: var(--ink);
+  max-height: 52%;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.live-coach-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; position: sticky; top: -2px; background: #f8f9fc; padding: 2px 0 8px; z-index: 1; }
+.live-coach-heading h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.live-coach-heading p, .live-coach-privacy, .live-coach-quiet { color: #536179; font-size: 12px; line-height: 1.6; margin: 0; }
+.live-coach-description { margin: 13px 0 7px; font-size: 13px; line-height: 1.65; }
+.live-coach-privacy { margin-bottom: 12px; }
+.live-coach-quiet { margin-top: 12px; }
+.live-coach-suggestions { padding: 0; margin: 12px 0 0; list-style: none; }
+.live-coach-suggestions li { border-top: 1px solid var(--line); padding: 12px 0; }
+.live-coach-suggestions li:last-child { padding-bottom: 0; }
+.live-coach-source { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #536179; }
+.live-coach-source > span { min-width: 0; overflow-wrap: anywhere; }
+.live-coach-source .icon-button { margin-left: auto; width: 30px; height: 30px; flex-shrink: 0; }
+.live-coach-citation { background: #edf1fb; color: #4d5e91; border: 0; border-radius: 3px; padding: 3px 5px; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; flex-shrink: 0; }
+.live-coach-citation:hover { background: #e3e9fa; }
+.live-coach-suggestions li > p { margin: 6px 0 10px; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.live-coach-error { margin-top: 12px; color: #99454e; font-size: 12px; line-height: 1.6; }
+.live-coach-error p { margin: 3px 0; }
+.live-coach-saved { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: #536179; line-height: 1.6; margin: 12px 0 0; }
+.live-coach-saved svg { flex-shrink: 0; margin-top: 3px; }
+.live-coach + .assistant-messages .assistant-welcome { padding-top: 15px; }
+.live-coach-agents { margin: 12px 0; padding: 0; border: 0; display: grid; gap: 9px; }
+.live-coach-agents legend { font-size: 12px; color: #536179; margin-bottom: 8px; }
+.live-coach-agents label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.live-coach-agents input { accent-color: var(--accent); margin-top: 3px; }
+.live-coach-agents label span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.live-coach-agents small { font-size: 12px; color: #536179; }
+.live-coach-manage { border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; margin-left: 10px; }
+.meeting-agents { padding: 25px 0; border-top: 1px solid var(--line); margin-top: 25px; }
+.meeting-agents h2 { font-size: 17px; margin: 0 0 8px; }
+.meeting-agent-list { list-style: none; padding: 0; margin: 18px 0 14px; }
+.meeting-agent-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.meeting-agent-list li > div { display: grid; gap: 5px; min-width: 0; }
+.meeting-agent-list strong { font-size: 13px; overflow-wrap: anywhere; }
+.meeting-agent-list span { font-size: 12px; color: #536179; }
+.meeting-agent-form { margin-top: 18px; }
+.meeting-agent-form select { margin-top: 8px; width: 100%; padding: 9px 11px; font: inherit; border: 1px solid #dce2ed; border-radius: 5px; background: #fff; color: var(--ink); }
+.meeting-agent-error { color: #99454e; font-size: 13px; line-height: 1.6; }
 .assistant-art {
   display: flex;
   align-items: center;
@@ -4563,3 +4609,16 @@ mark {
 .notion-template-ready strong { color: #292e3a; font-weight: 600; }
 .notion-template-ready p { margin: 3px 0 7px; }
 .notion-template-ready + .notion-template-intro { margin-top: 18px; }
+
+/* Keep live help legible and its controls reachable on compact surfaces. */
+.live-coach-heading > div { min-width: 0; }
+.live-coach-heading .live-coach-active-agents { margin-top: 5px; overflow-wrap: anywhere; }
+.meeting-agent-remove { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.meeting-agent-remove p { margin: 0 0 10px; font-size: 13px; line-height: 1.6; }
+@media (max-width: 700px) {
+  .live-coach .button, .live-coach .live-coach-manage, .live-coach .live-coach-citation,
+  .live-coach-source .icon-button, .meeting-agents .button { min-height: 40px; }
+  .live-coach-source .icon-button, .live-coach .live-coach-citation { min-width: 40px; }
+  .live-coach-agents label { min-height: 40px; }
+  .meeting-agents input, .meeting-agents select { min-height: 40px; }
+}
