@@ -321,7 +321,7 @@ pub fn parse_ics(text: &str) -> Result<Value> {
                         .unwrap_or_else(|| v.strip_prefix("mailto:").unwrap_or(v).to_owned())
                 })
                 .collect();
-            result.push(json!({"id":format!("ics-import:{uid}:{}",start.timestamp()),"source":"ics-import","title":title,"start":start.to_rfc3339(),"end":end.to_rfc3339(),"joinUrl":join,"attendees":attendees}));
+            result.push(json!({"id":format!("ics-import:{uid}:{}",start.timestamp()),"source":"ics-import","title":title,"start":start.to_rfc3339(),"end":end.to_rfc3339(),"joinUrl":join,"attendees":attendees,"allDay":date_only}));
             if result.len() > 1000 {
                 return Err(error("Import at most 1,000 calendar entries at a time."));
             }

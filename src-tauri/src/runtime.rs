@@ -19,8 +19,16 @@ pub struct DesktopRuntime {
     capture: Arc<CaptureEngine>,
     pub archive: Arc<LocalArchive>,
     shortcut: Mutex<serde_json::Value>,
+    reminders: crate::reminders::ReminderWorker,
 }
 impl DesktopRuntime {
+    /// Only the Tauri host calls this; the diagnostic host remains inert.
+    pub fn start_reminders(
+        &self,
+        notifications: Arc<dyn crate::adapters::notifications::Notifications>,
+    ) -> Result<()> {
+        self.reminders.start(self.service.clone(), notifications)
+    }
     pub fn recording_shortcut_registered(&self, available: bool) {
         let mut status = self.shortcut.lock().unwrap_or_else(|p| p.into_inner());
         status["recordingShortcutAvailable"] = serde_json::json!(available);
@@ -43,6 +51,28 @@ impl DesktopRuntime {
                 .ok_or_else(|| AppError::new("invalid_arguments", format!("Missing {key}.")))
         };
         match method {
+            "update_settings" if params["changes"].get("meetingReminders").is_some() => {
+                Err(AppError::invalid(
+                    "Use the meeting reminder control to change notification access.",
+                ))
+            }
+            "meeting_reminder_status" => self
+                .reminders
+                .status(self.service.meeting_reminders_enabled()?),
+            "set_meeting_reminders" => {
+                let enabled = params["enabled"].as_bool().ok_or_else(|| {
+                    AppError::invalid("Choose whether to enable meeting reminders.")
+                })?;
+                if enabled {
+                    self.reminders.request_permission()?;
+                }
+                self.service.set_meeting_reminders_enabled(enabled)?;
+                self.reminders.status(enabled)
+            }
+            "shutdown" | "quit_app" => {
+                self.reminders.shutdown();
+                self.service.handle("shutdown", json!({}))
+            }
             "audio_source" => {
                 self.service.handle(method, params.clone())?;
                 Ok(
@@ -80,13 +110,45 @@ impl DesktopRuntime {
                     params["systemAudio"].as_bool().unwrap_or(true),
                 )
             }
-            "calendar_status" => calendar::status(),
-            "connect_calendar" => calendar::connect(),
-            "calendar_events" => calendar::events(text("from")?, text("to")?),
-            "import_calendar" => calendar::import(Path::new(text("path")?)),
+            "calendar_status" | "connect_calendar" => {
+                let status = if method == "connect_calendar" {
+                    calendar::connect()?
+                } else {
+                    calendar::status()?
+                };
+                if status["connected"] != true {
+                    self.service.invalidate_calendar_snapshot("device")?;
+                }
+                Ok(status)
+            }
+            "calendar_events" => {
+                let events = calendar::events(text("from")?, text("to")?).inspect_err(|_| {
+                    let _ = self.service.invalidate_calendar_snapshot("device");
+                })?;
+                let snapshot = events
+                    .as_array()
+                    .ok_or_else(|| AppError::invalid("Calendar returned an invalid snapshot."))?;
+                self.service
+                    .replace_calendar_snapshot("device", snapshot, &chrono::Utc::now().to_rfc3339())
+                    .inspect_err(|_| {
+                        let _ = self.service.invalidate_calendar_snapshot("device");
+                    })?;
+                Ok(events)
+            }
+            "import_calendar" => {
+                let events = calendar::import(Path::new(text("path")?))?;
+                let snapshot = events
+                    .as_array()
+                    .ok_or_else(|| AppError::invalid("Calendar returned an invalid snapshot."))?;
+                self.service.replace_calendar_snapshot(
+                    "import",
+                    snapshot,
+                    &chrono::Utc::now().to_rfc3339(),
+                )?;
+                Ok(events)
+            }
             // Window lifecycle is supplied by the desktop host; diagnostics still flush safely.
             "hide_window" => Ok(json!({"hidden":true})),
-            "quit_app" => self.service.handle("shutdown", json!({})),
             _ => self.service.handle(method, params),
         }
     }
@@ -158,5 +220,6 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
         shortcut: Mutex::new(
             serde_json::json!({"recordingShortcut":"CommandOrControl+Shift+R","recordingShortcutAvailable":false,"message":null,"lastIntent":null}),
         ),
+        reminders: crate::reminders::ReminderWorker::default(),
     }))
 }

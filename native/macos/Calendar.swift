@@ -35,7 +35,9 @@ import CoreGraphics
             guard args.count == 3, let from = formatter.date(from:args[1]), let to = formatter.date(from:args[2]), to > from, to.timeIntervalSince(from) <= 31*86400 else { send(["error":"Choose a date range of at most 31 days."]); return }
             let store = EKEventStore()
             let predicate = store.predicateForEvents(withStart:from,end:to,calendars:nil)
-            let events = store.events(matching:predicate).sorted { $0.startDate < $1.startDate }.prefix(250).map { event -> [String:Any] in
+            let events = store.events(matching:predicate).filter { event in
+                event.status != .canceled && !(event.attendees ?? []).contains { $0.isCurrentUser && $0.participantStatus == .declined }
+            }.sorted { $0.startDate < $1.startDate }.prefix(250).map { event -> [String:Any] in
                 let url = event.url?.absoluteString ?? ""
                 let join = [url,event.location ?? "",event.notes ?? ""].compactMap { text -> String? in
                     guard let detector = try? NSDataDetector(types:NSTextCheckingResult.CheckingType.link.rawValue) else {return nil}
@@ -43,7 +45,7 @@ import CoreGraphics
                         if let link = match.url, ["https","http"].contains(link.scheme?.lowercased() ?? "") { return link.absoluteString }
                     }; return nil
                 }.first ?? ""
-                return ["id":"apple-calendar:\(event.calendarItemIdentifier):\(formatter.string(from:event.startDate))","source":"apple-calendar","title":event.title ?? "Untitled event","start":formatter.string(from:event.startDate),"end":formatter.string(from:event.endDate),"joinUrl":join,"attendees":(event.attendees ?? []).prefix(100).map { $0.name ?? $0.url.absoluteString }]
+                return ["id":"apple-calendar:\(event.calendarItemIdentifier):\(formatter.string(from:event.startDate))","source":"apple-calendar","title":event.title ?? "Untitled event","start":formatter.string(from:event.startDate),"end":formatter.string(from:event.endDate),"joinUrl":join,"attendees":(event.attendees ?? []).prefix(100).map { $0.name ?? $0.url.absoluteString },"allDay":event.isAllDay]
             }
             send(events)
         default: send(["error":"Unknown calendar command."])

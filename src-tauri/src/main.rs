@@ -97,7 +97,10 @@ async fn engine_call(
     Ok(result)
 }
 fn main() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_notification::init());
+    let app = builder
         .register_asynchronous_uri_scheme_protocol("tuck-audio", |context, request, responder| {
             if context.webview_label() != "main" {
                 responder.respond(
@@ -217,6 +220,15 @@ fn main() {
             };
             if let Ok(runtime) = &app.state::<RuntimeState>().service {
                 runtime.recording_shortcut_registered(registered);
+                #[cfg(target_os = "macos")]
+                let notifications = Arc::new(tuck::adapters::notifications::MacNotifications);
+                #[cfg(not(target_os = "macos"))]
+                let notifications = Arc::new(tuck::adapters::notifications::DesktopNotifications(
+                    app.handle().clone(),
+                ));
+                if let Err(error) = runtime.start_reminders(notifications) {
+                    eprintln!("Tuck meeting reminders unavailable: {}", error.message);
+                }
             }
             Ok(())
         })

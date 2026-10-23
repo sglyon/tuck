@@ -50,3 +50,12 @@ chrono-tz = "0.10"
 libc = "0.2"
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 symphonia = { version = "0.6.1", default-features = false, features = ["aac", "flac", "mp3", "isomp4", "pcm", "wav", "id3v2"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+objc2 = "0.6.3"
+objc2-foundation = "0.3.2"
+objc2-user-notifications = { version = "0.3.2", features = ["block2"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri-plugin-notification = "2"
