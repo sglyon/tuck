@@ -287,7 +287,7 @@ impl NotionPublisher {
     fn token(&self) -> Result<String> {
         self.secrets
             .get("notion")?
-            .ok_or_else(|| error("Add a Notion integration token in Settings first."))
+            .ok_or_else(|| error("Connect Notion in Settings first."))
     }
     fn send(
         &self,
@@ -398,6 +398,8 @@ impl NotionPublisher {
         ))
     }
     fn publish_snapshot(&self, target: &str, meeting: &Value, settings: &Value) -> Result<String> {
+        let selected = tuck_core::domain::publication_snapshot(meeting, settings)?;
+        let meeting = &selected;
         let token = self.token()?;
         let source = self.source(&token, target)?;
         let id = target_id(source["id"].as_str().unwrap_or(""))?;
@@ -818,6 +820,36 @@ mod tests {
             200,
             json!({"id":SOURCE,"title":rich("Meetings"),"properties":{"Topic":{"type":"title"}}}),
         )
+    }
+    #[test]
+    fn configured_content_selection_reaches_http_without_excluded_text() {
+        let settings = json!({"notionContent":{"recap":false,"notes":true,"tasks":false}});
+        let mut m = meeting();
+        m["summary"] = json!("Excluded recap");
+        m["tasks"] = json!([{"title":"Excluded action"}]);
+        let (publisher, worker) = script(vec![
+            source_step(),
+            (
+                "POST",
+                "/pages".into(),
+                200,
+                json!({"id":PAGE,"url":format!("https://app.notion.com/p/{PAGE}")}),
+            ),
+        ]);
+        publisher
+            .publish_with_settings(SOURCE, &m, &settings)
+            .unwrap();
+        let seen = worker.join().unwrap();
+        let body = seen[1]["body"].to_string();
+        assert!(body.contains("Send proposal"));
+        for excluded in [
+            "Excluded recap",
+            "Excluded action",
+            "private transcript",
+            "raw audio",
+        ] {
+            assert!(!body.contains(excluded));
+        }
     }
     fn page_step() -> Step {
         (

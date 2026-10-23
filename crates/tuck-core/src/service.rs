@@ -633,6 +633,8 @@ impl MeetingService {
         let _op = self.operation(id, "publication")?;
         let settings = self.get_settings()?;
         let target = domain::text(&settings["notionTarget"], "Notion destination", 2000, false)?;
+        // Validate the selection before changing publication lifecycle state.
+        domain::publication_snapshot(&json!({}), &settings)?;
         self.mutate(id, |m| {
             if updating {
                 m.begin_sync_publication()
@@ -641,6 +643,7 @@ impl MeetingService {
             }
         })?;
         let result = self.changed(id).and_then(|snapshot| {
+            let snapshot = domain::publication_snapshot(&snapshot, &settings)?;
             self.adapters
                 .publisher
                 .publish_with_settings(target, &snapshot, &settings)

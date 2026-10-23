@@ -12,6 +12,8 @@ mod dictation;
 mod library_loading;
 #[path = "core/meeting_day.rs"]
 mod meeting_day;
+#[path = "core/publication_preferences.rs"]
+mod publication_preferences;
 fn tx(store: &dyn Store, mut f: impl FnMut(&mut dyn Repository) -> Result<Value>) -> Result<Value> {
     store.transaction(&mut f)
 }
@@ -212,6 +214,7 @@ struct Publisher {
     bad_url: Mutex<bool>,
     calls: Mutex<usize>,
     settings: Mutex<Vec<Value>>,
+    published: Mutex<Vec<Value>>,
     recoveries: Mutex<Vec<(String, Value, String)>>,
 }
 impl PublicationPort for Publisher {
@@ -245,7 +248,8 @@ impl PublicationPort for Publisher {
         Ok(json!({"id":target,"title":"Meetings","properties":[]}))
     }
 
-    fn publish(&self, _: &str, _: &Value) -> Result<String> {
+    fn publish(&self, _: &str, meeting: &Value) -> Result<String> {
+        self.published.lock().unwrap().push(meeting.clone());
         *self.calls.lock().unwrap() += 1;
         if *self.uncertain.lock().unwrap() {
             Err(AppError::new(

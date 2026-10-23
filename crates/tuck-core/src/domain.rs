@@ -357,7 +357,7 @@ impl TranscriptSegment {
     }
 }
 pub fn default_settings() -> Value {
-    json!({"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"threads":2,"meetingReminders":false,"keepAudio":true,"customTemplates":[],"recipes":[
+    json!({"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"notionContent":{"recap":true,"notes":true,"tasks":true},"threads":2,"meetingReminders":false,"keepAudio":true,"customTemplates":[],"recipes":[
         {"id":"851ac7aa-aea5-4ed0-a750-838224c1850b","name":"Decisions and next steps","prompt":"What decisions were made and which next steps were agreed? Cite evidence. Include owners and dates only when stated; separate suggestions from commitments."},
         {"id":"35ad4a91-65dc-47b8-814d-efc48d709a5c","name":"Follow-up draft","prompt":"Draft a concise follow-up message I can review. Cover the main outcome, agreed actions and unresolved questions. Preserve uncertainty and attach evidence citations. Do not send it."},
         {"id":"9051642a-114c-48c6-aeb6-847b7be6549a","name":"Risks and open questions","prompt":"Identify stated risks, blockers, dependencies and unanswered questions. Cite evidence and clearly label any inference. Do not invent risks unsupported by this meeting."}
@@ -400,6 +400,12 @@ pub fn updated_settings(current: &Value, changes: &Value) -> Result<Value> {
         if !result[name].is_boolean() {
             return Err(AppError::invalid(format!("{name} must be true or false.")));
         }
+    }
+    let content = notion_content(&result)?;
+    if result["notionAutoSync"] == true && !content.iter().any(|selected| *selected) {
+        return Err(AppError::invalid(
+            "Choose at least one item to publish before enabling automatic Notion publishing.",
+        ));
     }
     if !result["threads"]
         .as_u64()
@@ -446,6 +452,74 @@ pub fn updated_settings(current: &Value, changes: &Value) -> Result<Value> {
         ));
     }
     Ok(result)
+}
+
+/// Selection is explicit; older saved preferences retain the previous three-part export.
+pub fn notion_content(settings: &Value) -> Result<[bool; 3]> {
+    let Some(value) = settings.get("notionContent") else {
+        return Ok([true; 3]);
+    };
+    let fields = value
+        .as_object()
+        .ok_or_else(|| AppError::invalid("Choose the content to publish to Notion."))?;
+    if fields.len() != 3
+        || fields
+            .keys()
+            .any(|key| !matches!(key.as_str(), "recap" | "notes" | "tasks"))
+    {
+        return Err(AppError::invalid(
+            "Choose recap, personal notes and action items for Notion publishing.",
+        ));
+    }
+    let mut selected = [false; 3];
+    for (index, key) in ["recap", "notes", "tasks"].iter().enumerate() {
+        selected[index] = fields[*key]
+            .as_bool()
+            .ok_or_else(|| AppError::invalid("Notion content choices must be true or false."))?;
+    }
+    Ok(selected)
+}
+
+/// Only publication metadata and the user's selected text cross the publishing port.
+/// Speech evidence, chat and audio never belong to the publication payload.
+pub fn publication_snapshot(meeting: &Value, settings: &Value) -> Result<Value> {
+    let [recap, notes, tasks] = notion_content(settings)?;
+    if ![recap, notes, tasks].iter().any(|selected| *selected) {
+        return Err(AppError::invalid(
+            "Choose at least one item to publish in Notion settings.",
+        ));
+    }
+    let mut snapshot = json!({});
+    for field in [
+        "id",
+        "title",
+        "createdAt",
+        "folder",
+        "tags",
+        "people",
+        "notionUrl",
+        "notionStatus",
+    ] {
+        if let Some(value) = meeting.get(field) {
+            snapshot[field] = value.clone();
+        }
+    }
+    snapshot["summary"] = if recap {
+        meeting.get("summary").cloned().unwrap_or(json!(""))
+    } else {
+        json!("")
+    };
+    snapshot["notes"] = if notes {
+        meeting.get("notes").cloned().unwrap_or(json!(""))
+    } else {
+        json!("")
+    };
+    snapshot["tasks"] = if tasks {
+        meeting.get("tasks").cloned().unwrap_or(json!([]))
+    } else {
+        json!([])
+    };
+    Ok(snapshot)
 }
 
 pub fn text_list(value: &Value, label: &str, maximum: usize) -> Result<Vec<String>> {
