@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tuck-notion-auth",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "TUCK_NOTION_AUTH_PUBLIC_ORIGIN": "https://tuck-notion-auth.sglyon.workers.dev"
+  },
+  // OAuth callback query strings contain temporary authorization codes. Keep logs off.
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "NOTION_FLOWS", "class_name": "NotionFlow" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NotionFlow"] }],
+  "ratelimits": [
+    { "name": "NOTION_AUTH_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "NOTION_POLL_RATE_LIMIT", "namespace_id": "1002", "simple": { "limit": 240, "period": 60 } },
+    { "name": "NOTION_GLOBAL_RATE_LIMIT", "namespace_id": "1003", "simple": { "limit": 600, "period": 60 } }
+  ]
+  // Operator adds NOTION_OAUTH_CLIENT_ID and installs NOTION_OAUTH_CLIENT_SECRET as a secret.
+  // A custom HTTPS domain is optional; keep the registered callback and desktop pin in sync.
+}

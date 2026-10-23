@@ -1,7 +1,8 @@
 //! Desktop composition root. No speech download, recording, or outbound request on launch.
 use crate::adapters::{
     archive::LocalArchive, capture::CaptureEngine, chatgpt::ChatGptAuth,
-    intelligence::Intelligence, notion::NotionPublisher, secrets::NativeSecrets,
+    intelligence::Intelligence, notion::NotionPublisher, notion_auth::NotionAuth,
+    secrets::NativeSecrets,
 };
 use std::{
     fs,
@@ -20,8 +21,19 @@ pub struct DesktopRuntime {
     pub archive: Arc<LocalArchive>,
     shortcut: Mutex<serde_json::Value>,
     reminders: crate::reminders::ReminderWorker,
+    notion_auth: Arc<NotionAuth>,
 }
 impl DesktopRuntime {
+    fn reset_notion_destination(&self) -> Result<()> {
+        self.service
+            .handle(
+                "update_settings",
+                serde_json::json!({"changes":{
+                    "notionTarget":"", "notionPropertyMapping":{}, "notionAutoSync":false
+                }}),
+            )
+            .map(|_| ())
+    }
     /// Only the Tauri host calls this; the diagnostic host remains inert.
     pub fn start_reminders(
         &self,
@@ -51,6 +63,36 @@ impl DesktopRuntime {
                 .ok_or_else(|| AppError::new("invalid_arguments", format!("Missing {key}.")))
         };
         match method {
+            "notion_account_status" => self.notion_auth.status(),
+            "notion_connect" => {
+                let before = self.notion_auth.status()?;
+                let connected = self.notion_auth.connect()?;
+                if before["workspaceId"].as_str().filter(|id| !id.is_empty())
+                    != connected["workspaceId"]
+                        .as_str()
+                        .filter(|id| !id.is_empty())
+                    || before["mode"] != connected["mode"]
+                {
+                    self.reset_notion_destination()?;
+                }
+                Ok(connected)
+            }
+            "notion_cancel_connect" => self.notion_auth.cancel(),
+            "notion_disconnect" => {
+                let disconnected = self.notion_auth.disconnect()?;
+                self.reset_notion_destination()?;
+                Ok(disconnected)
+            }
+            "save_secret" if params["kind"] == "notion" => {
+                let token = tuck_core::domain::text(&params["value"], "Credential", 8192, true)?;
+                if token.trim().is_empty() {
+                    self.notion_auth.disconnect()?;
+                } else {
+                    self.notion_auth.set_manual_token(token)?;
+                }
+                self.reset_notion_destination()?;
+                self.service.get_settings()
+            }
             "update_settings" if params["changes"].get("meetingReminders").is_some() => {
                 Err(AppError::invalid(
                     "Use the meeting reminder control to change notification access.",
@@ -70,6 +112,7 @@ impl DesktopRuntime {
                 self.reminders.status(enabled)
             }
             "shutdown" | "quit_app" => {
+                let _ = self.notion_auth.cancel();
                 self.reminders.shutdown();
                 self.service.handle("shutdown", json!({}))
             }
@@ -86,8 +129,16 @@ impl DesktopRuntime {
                 .clone()),
             "capture_devices" => capture_devices(),
             "capture_readiness" => {
-                self.capture.configure(&self.service.get_settings()?)?;
-                let mut ready = self.capture.readiness()?;
+                let mut settings = self.service.get_settings()?;
+                if params["kind"] == "dictation" {
+                    settings["diarization"] = json!(false);
+                }
+                self.capture.configure(&settings)?;
+                let mut ready = if params["kind"] == "dictation" {
+                    self.capture.readiness_for_dictation()?
+                } else {
+                    self.capture.readiness()?
+                };
                 let shortcut = self
                     .shortcut
                     .lock()
@@ -196,10 +247,11 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
         capture_emit,
     ));
     let archive = Arc::new(LocalArchive::new(data));
+    let notion_auth = Arc::new(NotionAuth::new(secrets.clone())?);
     let adapters = Adapters {
         capture: capture.clone(),
         intelligence: Arc::new(Intelligence::new(auth.clone(), secrets.clone())?),
-        publisher: Arc::new(NotionPublisher::new(secrets.clone())?),
+        publisher: Arc::new(NotionPublisher::new(notion_auth.clone())?),
         accounts: auth,
         secrets,
         archive: archive.clone(),
@@ -221,5 +273,6 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
             serde_json::json!({"recordingShortcut":"CommandOrControl+Shift+R","recordingShortcutAvailable":false,"message":null,"lastIntent":null}),
         ),
         reminders: crate::reminders::ReminderWorker::default(),
+        notion_auth,
     }))
 }
