@@ -1,0 +1,57 @@
+{
+  "verifiedAt": "2026-10-23T16:36:46.243162+00:00",
+  "applicationSourceCommit": "8d53b127199a4d2cf5ebda5fb41704f20ba6d15b",
+  "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
+  "bundleBytes": 61817335,
+  "mainExecutableSha256": "425d85948b06a0ece3dbe71e80cff145527920044a0b61eeb5946305613b422b",
+  "pythonFiles": [],
+  "bundledModelOrQualificationFiles": [],
+  "licensePresent": true,
+  "notificationDependencyNoticePresent": true,
+  "coreUnitTestsPassed": 3,
+  "coreIntegrationTestsPassed": 55,
+  "nativeLibraryTestsPassed": 84,
+  "nativeLibraryTestsIgnored": 2,
+  "desktopLifecycleTestsPassed": 2,
+  "uiUnitTestsPassed": 7,
+  "uiE2ETestsPassed": 44,
+  "impeccableScores": {
+    "meetingDay": 33
+  },
+  "meetingDayNativeIntegrationRequests": 30,
+  "librarySmokeRequests": 21,
+  "meetingDayNativeIntegrationEvidence": "meeting-day.json",
+  "librarySmokeEvidence": "meeting-day-library-smoke.json",
+  "previousNativeAcceptanceEvidence": "paged-library-package.json",
+  "finalNativePlaybackVerified": true,
+  "latestNativeWindowCheck": "Passed after unlock: older process quit and the exact new package relaunched; native calendar controls, preserved notes, close/save, public audio playback/seek and File setup fallback verified.",
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "calendarContentsAccess": false,
+  "notificationAuthorizationRequested": false,
+  "notificationDeliveryAttempted": false,
+  "externalProviderAccess": false,
+  "minimum16GBRealCallQualified": false,
+  "distribution": "Unsigned development app",
+  "buildAdvisories": [
+    "Main JavaScript chunk530.07kB (161.72kB gzip), above Vite500kB advisory.",
+    "Pinned FluidAudio dependency emits Swift/compiler warnings; native helper build succeeds."
+  ],
+  "nativeAcceptanceVerifiedAt": "2026-10-23T17:24:06.262304+00:00",
+  "nativeAcceptanceChecks": [
+    "older running process quit; exact packaged app relaunched with Next meeting interface",
+    "existing verification title, recap and notes preserved through schema v4 startup",
+    "Calendar & reminders exposes device connection and ICS import; five-minute reminder checkbox remains off",
+    "pending edit in existing labeled test note survives immediate Cmd-W hide and reopening",
+    "retained public Kennedy clip loads paused with three-second duration, plays to end and seeks while paused",
+    "File Record a meeting opens Audio & models setup with no recording",
+    "verification meeting left open on its saved Notes tab"
+  ],
+  "nativeAcceptanceLimits": [
+    "no calendar connection or calendar import performed in the personal library",
+    "no notification authorization requested or actual notification delivery attempted",
+    "no microphone/system capture or external account access",
+    "no audible speaker-output assertion or long-file playback qualification",
+    "no16GB real-call qualification"
+  ]
+}

@@ -19,11 +19,11 @@ The **Meeting Workspace** is one bounded context owned by the Tuck team. The rep
 
 External systems have divergent terms: an OAuth registration is not a meeting participant; a Notion page is not a meeting; an ASR stream is not a transcript. Their adapters translate these models at the edge. OpenAI, Notion, and inference-runtime maintainers are independent upstream suppliers whose APIs Tuck cannot control; their schemas stay in anticorruption adapters. Tuck owns the vocabulary and DTOs in `contracts.md`.
 
-The app is a single-user desktop process. The trusted Rust host is the inbound security boundary; a narrow native Swift helper handles Apple Core ML inference. There is no public HTTP server, event bus, DI framework, event sourcing, CQRS subsystem, or speculative cloud service.
+The app is a single-user desktop process. The trusted Rust host is the inbound security boundary; a narrow native Swift helper handles Apple Core ML inference. The desktop exposes no public HTTP server and introduces no event bus, DI framework, event sourcing or CQRS subsystem. The separate Cloudflare authorization Worker is described below.
 
 ## Language and state
 
-- **Meeting**: the user's conversation workspace. It owns its title, notes, summary, lifecycle, and publication state.
+- **Meeting**: the user's conversation workspace. It owns its title, notes, summary, lifecycle, and publication state. A defaulted immutable kind distinguishes meeting work from microphone-only dictation while reusing the same lifecycle and evidence.
 - **Transcript segment**: immutable speech evidence with a source, provisional speaker, and audio time range. User corrections are separate records; the interface and derived context identify the effective corrected text and retain the original. Transcript text is evidence, never executable instructions.
 - **Speaker label**: a meeting-scoped name assigned by the user. A diarization cluster is not a verified identity.
 - **My notes**: user-authored text. Generating a summary never replaces it.
@@ -48,7 +48,7 @@ The concrete reason for hexagonal architecture is SGL's requirement to replace S
 | PublicationPort | NotionPublisher | Translate notes into Notion and distinguish uncertain network outcomes. |
 | AudioArchivePort | LocalAudioArchive | Resolve owned audio, copy recovery recordings, remove owned files, write exports and stage portable backup/restore. |
 
-Tauri commands call `MeetingService` on bounded blocking workers, keeping model and network work away from the webview. A diagnostic `tuck-runtime` JSONL executable calls the same composition root for integration checks. The former Python implementation under `engine/` remains a reference test oracle and benchmark baseline; it is not called or bundled by the production desktop app. Business rules live in the Rust core, not RPC dispatch. See [Rust core](rust-core.md) for exact port and transaction contracts.
+Tauri commands call `MeetingService` on bounded blocking workers, keeping model and network work away from the webview. A diagnostic `tuck-runtime` JSONL executable calls the same composition root for integration checks. The former Python implementation under `engine/` remains a reference test oracle and benchmark baseline; it is not called or bundled by the production desktop app. Business rules live in the Rust core, not RPC dispatch. Publication selection projects only chosen text and allow-listed metadata before the publisher sees it. Template provisioning uses that same publication port; a small device-local setup journal brackets remote creation and prevents blind retries after interruption. It is not portable meeting data and cannot be changed through user preferences. Notion OAuth remains an adapter: an authorization-only Cloudflare Worker protects the shared app secret, while one short-lived Durable Object coordinates each handoff. This does not add a hosted meeting database or account system. The desktop stores its own credential bundle in the OS keyring and a per-user OS file lease prevents competing processes from rotating it concurrently. See [Rust core](rust-core.md) for exact port and transaction contracts.
 
 ## Transactions and concurrency
 

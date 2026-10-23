@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-10-23T17:59:52.352Z",
+  "engineSha256": "74319190b853a9d3821c0f5898c6c2370e7248e35ce18e0f36cbc5b4ec9adf7f",
+  "requests": 17,
+  "realParakeet": true,
+  "publicAudioFixtureSha256": "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6",
+  "checks": [
+    "dictation identity survives header/detail startup and backup merge",
+    "real Parakeet recovery creates editable text from public speech without AI or publishing",
+    "manual edits retain immutable source recognition and original audio bytes",
+    "publishing content choices persist; restored automatic processing stays off"
+  ],
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "externalProviderAccess": false,
+  "personalLibraryAccess": false,
+  "liveDictationHardwareQualified": false
+}

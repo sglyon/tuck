@@ -1,0 +1,41 @@
+{
+  "verifiedAt": "2026-10-23T18:40:36.778793+00:00",
+  "applicationSourceCommit": "6670be71df0e976c5b60579f0bacfdcd3f2172c8",
+  "mainExecutableSha256": "1889762c239e3f716a99d322bbdf996ae56b5272b73536bd4dc0358214ab5963",
+  "initialCreationExecutableSha256": "35d285fa3224e07017ef4f16f09f4ba65ac8226fe1e9a75729e49a5be88cba60",
+  "databaseUrl": "https://app.notion.com/p/6e006232-f019-4794-967a-a5a170f4fc42",
+  "verificationPageUrl": "https://app.notion.com/p/402d3574-7fa0-81b2-86f8-cbe599a13cf9",
+  "checks": [
+    "public OAuth consent completed by SGL and connected native status persisted across package restart",
+    "native guided setup listed only the authorized Tuck parent page and created its real seven-column database",
+    "creation selected the data source and all five mappings without enabling automatic publishing",
+    "final app finished the existing initial view through the dedicated layout operation without another database",
+    "settled Notion browser showed Recent meetings with Name, Meeting date, Folder, Tags and People; ID and creation timestamp hidden",
+    "public verification recap, personal notes and completed test action published with correct meeting date and local meeting ID",
+    "native Update notes updated the same Notion page with the additional labeled paragraph and retained recap/actions",
+    "one verification meeting row remained in the chosen database",
+    "native restart retained the connected account, ready database without a layout warning, selected content and automatic publishing off",
+    "after restart, native mapping controls showed Meeting date, Folder, Tags, People and Tuck meeting ID matched to all five standard columns"
+  ],
+  "nativeCoreSetupTests": 11,
+  "nativeAdapterTests": 22,
+  "uiTemplateBehaviorTests": 12,
+  "impeccableScores": [
+    31,
+    32
+  ],
+  "automaticPublishingEnabled": false,
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "chatgptAccountAccess": false,
+  "paidInference": false,
+  "personalLibraryAccess": "Native UI only; existing clearly labeled public-audio verification draft. No direct database access.",
+  "credentialsReadOrRecorded": false,
+  "limits": [
+    "refresh/revoke and account switching use isolated protocol tests, not the connected workspace",
+    "no actual microphone dictation or real-call resource qualification",
+    "first creation used the preceding build and exercised honest layout warning; final build completed and verified that same database layout",
+    "Notion browser initially displays cached pre-hydration view; final observation used its settled state"
+  ],
+  "restartVerifiedAt": "2026-10-23T18:41:48.577937+00:00"
+}
