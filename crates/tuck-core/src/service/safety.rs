@@ -361,7 +361,16 @@ impl MeetingService {
                 for v in &entry.bookmarks { r.add_bookmark(&m.id,v)?; }
                 for v in &entry.revisions { r.add_revision(&m.id,v)?; }
             }
-            let mut settings=if existing.is_empty() { manifest.settings.clone() } else { r.settings()? };
+            let device_settings=r.settings()?;
+            let mut settings=if existing.is_empty() { manifest.settings.clone() } else { device_settings.clone() };
+            // Restoring portable preferences must not erase a device's unresolved
+            // remote creation or let an older setup response reselect its target.
+            if existing.is_empty() {
+                if let Some(journal)=device_settings.get("_notionSetup").filter(|j| j.is_object()) {
+                    settings["_notionSetup"]=journal.clone();
+                    settings["_notionSetup"]["attempt"]=json!(domain::id());
+                }
+            }
             if !existing.is_empty() {
                 for field in ["customTemplates","recipes"] {
                     let mut items=settings[field].as_array().cloned().unwrap_or_default();

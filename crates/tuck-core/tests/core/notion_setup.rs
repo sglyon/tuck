@@ -255,3 +255,96 @@ fn portable_backup_excludes_the_device_creation_journal() {
         assert!(!manifest.to_string().contains("test-notion-token"));
     }
 }
+
+#[test]
+fn restoring_safe_preferences_retains_an_uncertain_device_creation_journal() {
+    for store in stores() {
+        let r = rig(store);
+        connect(&r);
+        call(
+            &r.service,
+            "backup_library",
+            json!({"path":"/fixture/before-setup.zip","includeAudio":false}),
+        );
+        call(
+            &r.service,
+            "update_settings",
+            json!({"changes":{"threads":4}}),
+        );
+        r.publisher
+            .provision_outcomes
+            .lock()
+            .unwrap()
+            .push(Err(AppError::new(
+                "notion_setup_uncertain",
+                "The response was lost after sending creation.",
+            )));
+        assert!(r.service.create_notion_database(PARENT).is_err());
+        let preview = call(
+            &r.service,
+            "preview_restore_library",
+            json!({"path":"/fixture/before-setup.zip"}),
+        );
+        assert_eq!(preview["settingsMode"], "safe-preferences");
+        // Preview must neither drop the journal nor permit another remote creation.
+        assert_eq!(
+            r.service.get_settings().unwrap()["notionSetup"]["status"],
+            "uncertain"
+        );
+        call(
+            &r.service,
+            "restore_library",
+            json!({"path":"/fixture/before-setup.zip","expectedFingerprint":preview["fingerprint"]}),
+        );
+        let settings = r.service.get_settings().unwrap();
+        assert_eq!(settings["threads"], 2);
+        assert_eq!(settings["notionTarget"], "");
+        assert_eq!(settings["notionAutoSync"], false);
+        assert_eq!(settings["notionSetup"]["status"], "uncertain");
+        assert_eq!(settings["notionSetup"]["parent"], PARENT);
+        r.service.create_notion_database(PARENT).unwrap();
+        assert_eq!(
+            *r.publisher.provisioned.lock().unwrap(),
+            vec![(PARENT.into(), true), (PARENT.into(), false)]
+        );
+    }
+}
+
+#[test]
+fn restoring_safe_preferences_invalidates_a_delayed_creation_response() {
+    for store in stores() {
+        let r = rig(store);
+        connect(&r);
+        call(
+            &r.service,
+            "backup_library",
+            json!({"path":"/fixture/before-setup.zip","includeAudio":false}),
+        );
+        let service = Arc::downgrade(&r.service);
+        *r.publisher.provision_hook.lock().unwrap() = Some(Box::new(move || {
+            call(
+                &service.upgrade().unwrap(),
+                "restore_library",
+                json!({"path":"/fixture/before-setup.zip","expectedFingerprint":"a".repeat(64)}),
+            );
+        }));
+        assert_eq!(
+            r.service.create_notion_database(PARENT).unwrap_err().code,
+            "notion_setup_changed"
+        );
+        let settings = r.service.get_settings().unwrap();
+        assert_eq!(settings["notionTarget"], "");
+        assert_eq!(settings["notionPropertyMapping"], json!({}));
+        assert_eq!(settings["notionSetup"]["parent"], PARENT);
+        assert!(matches!(
+            settings["notionSetup"]["status"].as_str(),
+            Some("creating" | "uncertain")
+        ));
+        *r.publisher.provision_hook.lock().unwrap() = None;
+        r.service.create_notion_database(PARENT).unwrap();
+        assert_eq!(
+            *r.publisher.provisioned.lock().unwrap(),
+            vec![(PARENT.into(), true), (PARENT.into(), false)]
+        );
+    }
+}
