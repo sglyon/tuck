@@ -11,7 +11,7 @@
     "desktop:build": "tauri build",
     "native:setup": "node scripts/prepare-native.mjs",
     "engine:setup": "npm run native:setup",
-    "engine:test": "cargo test --manifest-path crates/tuck-core/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml --lib",
+    "engine:test": "cargo test --manifest-path crates/tuck-core/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml --all-targets",
     "reference:test": "uv run --project engine python -m unittest discover -s engine/tests -v",
     "test": "vitest run",
     "test:e2e": "playwright test",

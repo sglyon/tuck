@@ -303,6 +303,35 @@ fn cursor_binding_rollback_and_relevant_mutations_are_explicit() {
                 .is_ok(),
             "normalized selection must replay"
         );
+        // Near-budget escaped labels exercise the generated cursor's byte size,
+        // not only rejection of an oversized caller-supplied cursor.
+        let labels: Vec<_> = (0..30)
+            .map(|n| format!("{n:03}{}", "\\\0".repeat(118)))
+            .collect();
+        tx(&*store, |repo| {
+            for id in ["meeting-000", "meeting-001"] {
+                let mut m = repo.get(id)?;
+                m.update(&json!({"tags":labels}))?;
+                repo.save(&mut m)?;
+            }
+            Ok(Value::Null)
+        })
+        .unwrap();
+        let large = call(
+            &r.service,
+            "list_meetings",
+            json!({"limit":1,"scope":{"tags":labels}}),
+        );
+        assert_eq!(large["total"], 2);
+        assert!(large["nextCursor"].as_str().unwrap().len() > 28_000);
+        let last = call(
+            &r.service,
+            "list_meetings",
+            json!({"limit":1,"cursor":large["nextCursor"],"scope":{"tags":labels}}),
+        );
+        assert_eq!(last["meetings"].as_array().unwrap().len(), 1);
+        assert_ne!(last["meetings"][0]["id"], large["meetings"][0]["id"]);
+        assert!(last["nextCursor"].is_null());
     }
 }
 
