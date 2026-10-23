@@ -193,3 +193,62 @@ export interface RetainedAudioFile {
   duration?: number;
   repairable?: boolean;
 }
+
+export type MeetingHeader = Pick<
+  Meeting,
+  | "id"
+  | "title"
+  | "createdAt"
+  | "duration"
+  | "status"
+  | "template"
+  | "starred"
+  | "isExample"
+  | "notionUrl"
+  | "notionStatus"
+  | "folder"
+  | "tags"
+  | "people"
+  | "calendarEvent"
+  | "recoveredFrom"
+> & {
+  segmentCount: number;
+  speakerCount: number;
+  messageCount: number;
+  bookmarkCount: number;
+  taskCount: number;
+  openTaskCount: number;
+  hasNotes: boolean;
+  hasSummary: boolean;
+};
+export interface MeetingPage {
+  meetings: MeetingHeader[];
+  nextCursor: string | null;
+  total: number;
+}
+export interface LibraryOverview {
+  meetingCount: number;
+  starredCount: number;
+  openTaskCount: number;
+  folders: string[];
+  tags: string[];
+  people: string[];
+  facetsTruncated: { folders: boolean; tags: boolean; people: boolean };
+  activeMeetingId: string | null;
+}
+export interface LibraryBootstrap {
+  meetingPage: MeetingPage;
+  library: LibraryOverview;
+  settings: Settings;
+  status: EngineStatus;
+  accounts: Account[];
+}
+export type LibraryTask = ActionItem & {
+  meetingId: string;
+  meetingTitle: string;
+};
+export interface TaskPage {
+  tasks: LibraryTask[];
+  nextCursor: string | null;
+  total: number;
+}

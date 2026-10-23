@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -8,8 +8,17 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { call, subscribe } from "../lib/bridge";
-import type { Meeting, Message, SearchHit, Settings } from "../lib/types";
+import type {
+  LibraryOverview,
+  Meeting,
+  MeetingPage,
+  Message,
+  SearchHit,
+  Settings,
+  TaskPage,
+} from "../lib/types";
 import { Markdown } from "./Markdown";
+import { cursorStale, libraryScope } from "../lib/library";
 import { clock } from "../lib/format";
 export interface LibraryScope {
   folder: string;
@@ -17,22 +26,14 @@ export interface LibraryScope {
   person: string;
 }
 export function ScopeFilters({
-  meetings,
+  library,
   scope,
   onChange,
 }: {
-  meetings: Meeting[];
+  library: LibraryOverview;
   scope: LibraryScope;
   onChange: (s: LibraryScope) => void;
 }) {
-  const values = (field: "folder" | "tags" | "people") =>
-    [
-      ...new Set(
-        meetings.flatMap((m) =>
-          field === "folder" ? (m.folder ? [m.folder] : []) : m[field] || [],
-        ),
-      ),
-    ].sort();
   return (
     <details className="scope-filters">
       <summary>
@@ -42,27 +43,61 @@ export function ScopeFilters({
       <div>
         {(
           [
-            ["folder", "Folder", "folder"],
+            ["folder", "Folder", "folders"],
             ["tag", "Tag", "tags"],
             ["person", "Person", "people"],
           ] as const
         ).map(([key, label, field]) => (
           <label key={key}>
             {label}
-            <select
-              aria-label={`Filter by ${label.toLowerCase()}`}
-              value={scope[key]}
-              onChange={(e) => onChange({ ...scope, [key]: e.target.value })}
-            >
-              <option value="">
-                All {key === "person" ? "people" : `${label.toLowerCase()}s`}
-              </option>
-              {values(field).map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </select>
+            {library.facetsTruncated[field] ? (
+              <>
+                <input
+                  aria-label={`Filter by ${label.toLowerCase()}`}
+                  key={`${key}-${scope[key]}`}
+                  defaultValue={scope[key]}
+                  list={`library-${field}`}
+                  placeholder={`Any ${label.toLowerCase()}`}
+                  onBlur={(e) =>
+                    onChange({ ...scope, [key]: e.target.value.trim() })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+                <datalist id={`library-${field}`}>
+                  {library[field].map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+              </>
+            ) : (
+              <select
+                aria-label={`Filter by ${label.toLowerCase()}`}
+                value={scope[key]}
+                onChange={(e) => onChange({ ...scope, [key]: e.target.value })}
+              >
+                <option value="">
+                  All {key === "person" ? "people" : `${label.toLowerCase()}s`}
+                </option>
+                {[
+                  ...new Set([
+                    ...library[field],
+                    ...(scope[key] ? [scope[key]] : []),
+                  ]),
+                ].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+            )}
           </label>
         ))}
+        {Object.values(library.facetsTruncated).some(Boolean) && (
+          <p className="quiet-note">
+            Showing the first 200 choices. Type an exact name to filter beyond
+            these suggestions.
+          </p>
+        )}
         {Object.values(scope).some(Boolean) && (
           <button
             className="text-link"
@@ -77,7 +112,8 @@ export function ScopeFilters({
 }
 export default function LibraryDesk({
   mode,
-  meetings,
+  library,
+  revision,
   settings,
   scope,
   onSource,
@@ -85,7 +121,8 @@ export default function LibraryDesk({
   notify,
 }: {
   mode: "library" | "tasks";
-  meetings: Meeting[];
+  library: LibraryOverview;
+  revision: number;
   settings: Settings;
   scope: LibraryScope;
   onSource: (url: string) => void;
@@ -99,15 +136,100 @@ export default function LibraryDesk({
   const [busy, setBusy] = useState(false);
   const [stream, setStream] = useState("");
   const [includeDone, setDone] = useState(false);
-  const params = {
-    folder: scope.folder || undefined,
-    tags: scope.tag ? [scope.tag] : undefined,
-    people: scope.person ? [scope.person] : undefined,
-  };
+  const params = libraryScope(scope);
+  const scopeKey = JSON.stringify(params);
+  const [scopeCount, setScopeCount] = useState<number | null>(null);
+  const [taskPage, setTaskPage] = useState<TaskPage>({
+    tasks: [],
+    nextCursor: null,
+    total: 0,
+  });
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState("");
+  const [taskBusy, setTaskBusy] = useState<string | null>(null);
+  const taskRequest = useRef(0);
+  const pageRef = useRef(taskPage);
+  pageRef.current = taskPage;
+  const tasksPending = useRef(false);
+  const loadTasks = useCallback(
+    async (more = false) => {
+      if (more && (tasksPending.current || !pageRef.current.nextCursor)) return;
+      const token = ++taskRequest.current;
+      tasksPending.current = true;
+      setTasksLoading(true);
+      setTasksError("");
+      try {
+        const page = await call<TaskPage>("list_task_page", {
+          scope: JSON.parse(scopeKey),
+          includeDone,
+          limit: 50,
+          ...(more ? { cursor: pageRef.current.nextCursor } : {}),
+        });
+        if (token !== taskRequest.current) return;
+        setTaskPage((prev) =>
+          more
+            ? {
+                ...page,
+                tasks: [
+                  ...prev.tasks,
+                  ...page.tasks.filter(
+                    (t) =>
+                      !prev.tasks.some(
+                        (p) => p.id === t.id && p.meetingId === t.meetingId,
+                      ),
+                  ),
+                ],
+              }
+            : page,
+        );
+      } catch (e) {
+        if (token !== taskRequest.current) return;
+        if (more && cursorStale(e)) {
+          tasksPending.current = false;
+          await loadTasks(false);
+          return;
+        }
+        setTasksError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (token === taskRequest.current) {
+          tasksPending.current = false;
+          setTasksLoading(false);
+        }
+      }
+    },
+    [scopeKey, includeDone],
+  );
+  useEffect(() => {
+    if (mode !== "tasks") return;
+    void loadTasks();
+    return () => {
+      taskRequest.current++;
+    };
+  }, [mode, loadTasks, revision]);
+  useEffect(() => {
+    if (mode !== "library") return;
+    let current = true;
+    if (!Object.values(scope).some(Boolean)) {
+      setScopeCount(library.meetingCount);
+      return;
+    }
+    setScopeCount(null);
+    void call<MeetingPage>("list_meetings", {
+      scope: JSON.parse(scopeKey),
+      limit: 1,
+    })
+      .then((page) => {
+        if (current) setScopeCount(page.total);
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [mode, scopeKey, library.meetingCount, revision]);
   useEffect(() => {
     setHits([]);
     setSearched(false);
-  }, [scope.folder, scope.tag, scope.person]);
+  }, [scopeKey]);
   const execute = async (kind: "search" | "ask") => {
     if (!query.trim() || busy) return;
     setBusy(true);
@@ -156,19 +278,6 @@ export default function LibraryDesk({
       setStream("");
     }
   };
-  const scoped = meetings.filter(
-    (m) =>
-      (!scope.folder || m.folder === scope.folder) &&
-      (!scope.tag || m.tags?.includes(scope.tag)) &&
-      (!scope.person || m.people?.includes(scope.person)),
-  );
-  const tasks = scoped
-    .flatMap((m) =>
-      (m.tasks || [])
-        .filter((t) => includeDone || !t.done)
-        .map((t) => ({ ...t, meeting: m })),
-    )
-    .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
   if (mode === "tasks")
     return (
       <article className="library-desk">
@@ -184,23 +293,30 @@ export default function LibraryDesk({
           />
           Show completed
         </label>
-        {tasks.map((t) => (
-          <div className={`inbox-task${t.done ? " done" : ""}`} key={t.id}>
+        {taskPage.tasks.map((t) => (
+          <div
+            className={`inbox-task${t.done ? " done" : ""}`}
+            key={`${t.meetingId}:${t.id}`}
+          >
             <input
               type="checkbox"
               aria-label={`Complete ${t.title}`}
               checked={t.done}
+              disabled={tasksLoading || taskBusy === `${t.meetingId}:${t.id}`}
               onChange={async () => {
+                setTaskBusy(`${t.meetingId}:${t.id}`);
                 try {
                   merge(
                     await call<Meeting>("update_task", {
-                      meetingId: t.meeting.id,
+                      meetingId: t.meetingId,
                       id: t.id,
                       changes: { done: !t.done },
                     }),
                   );
                 } catch (e) {
                   notify(String(e), true);
+                } finally {
+                  setTaskBusy(null);
                 }
               }}
             />
@@ -214,16 +330,42 @@ export default function LibraryDesk({
               <button
                 className="text-link"
                 onClick={() =>
-                  onSource(`tuck://meeting/${t.meeting.id}?source=tasks`)
+                  onSource(`tuck://meeting/${t.meetingId}?source=tasks`)
                 }
               >
-                {t.meeting.title}
+                {t.meetingTitle}
                 <ArrowRight size={12} />
               </button>
             </div>
           </div>
         ))}
-        {!tasks.length && (
+        {tasksLoading && (
+          <p className="loading-note" role="status">
+            <LoaderCircle size={14} className="spin" />
+            Loading tasks…
+          </p>
+        )}
+        {tasksError && (
+          <div className="inline-retry" role="alert">
+            <p>{tasksError}</p>
+            <button className="text-link" onClick={() => void loadTasks()}>
+              Try again
+            </button>
+          </div>
+        )}
+        {taskPage.nextCursor && (
+          <button
+            className="button secondary compact load-more"
+            disabled={tasksLoading}
+            onClick={() => void loadTasks(true)}
+          >
+            Load more tasks{" "}
+            <span>
+              {taskPage.tasks.length} of {taskPage.total}
+            </span>
+          </button>
+        )}
+        {!taskPage.tasks.length && !tasksLoading && !tasksError && (
           <div className="desk-empty">
             <Check size={27} />
             <h2>{includeDone ? "No tasks here yet." : "You're up to date."}</h2>
@@ -242,11 +384,12 @@ export default function LibraryDesk({
         Find a spoken detail, or connect the dots across your meetings.
       </p>
       <div className="desk-scope">
-        {scoped.length} {scoped.length === 1 ? "conversation" : "conversations"}
+        {scopeCount === null
+          ? "Checking scope…"
+          : `${scopeCount} ${scopeCount === 1 ? "conversation" : "conversations"}`}
         {Object.values(scope).some(Boolean)
           ? " in your current filters"
           : " in your library"}
-        {scoped.some((m) => m.isExample) && " · includes illustrative examples"}
       </div>
       <form
         className="library-question"
@@ -368,7 +511,7 @@ export default function LibraryDesk({
         </div>
       ))}
       {busy && stream && <Markdown text={stream} />}
-      {searched && !hits.length && (
+      {searched && !hits.length && !busy && (
         <p className="quiet-note" role="status">
           No matching passages. Try a shorter phrase or clear your library
           filters.

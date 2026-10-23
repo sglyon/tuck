@@ -7,6 +7,7 @@ import type {
   MeetingChanges,
   ExportFormat,
 } from "./types";
+import { meetingHeader } from "./library";
 import { exampleMeeting } from "./example";
 import { exportContent } from "./format";
 export const native =
@@ -66,7 +67,9 @@ if (!native) {
     /* A blocked browser store still supports a session preview. */
   }
 }
+let previewGeneration = 0;
 function persist() {
+  previewGeneration++;
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch {
@@ -85,6 +88,150 @@ function previewCall(method: string, p: Record<string, unknown>): unknown {
   switch (method) {
     case "bootstrap":
       return { ...structuredClone(data), status: previewStatus, accounts: [] };
+    case "bootstrap_library":
+      return {
+        meetingPage: previewCall("list_meetings", { limit: p.limit ?? 50 }),
+        library: previewCall("library_overview", {}),
+        settings: structuredClone(data.settings),
+        status: previewStatus,
+        accounts: [],
+      };
+    case "get_meeting":
+      return structuredClone(get());
+    case "library_overview": {
+      const values = (field: "folder" | "tags" | "people") =>
+        [
+          ...new Set(
+            data.meetings.flatMap((m) =>
+              field === "folder"
+                ? m.folder
+                  ? [m.folder]
+                  : []
+                : m[field] || [],
+            ),
+          ),
+        ].sort();
+      const folders = values("folder"),
+        tags = values("tags"),
+        people = values("people");
+      return {
+        meetingCount: data.meetings.length,
+        starredCount: data.meetings.filter((m) => m.starred).length,
+        openTaskCount: data.meetings
+          .flatMap((m) => m.tasks || [])
+          .filter((t) => !t.done).length,
+        folders: folders.slice(0, 200),
+        tags: tags.slice(0, 200),
+        people: people.slice(0, 200),
+        facetsTruncated: {
+          folders: folders.length > 200,
+          tags: tags.length > 200,
+          people: people.length > 200,
+        },
+        activeMeetingId: null,
+      };
+    }
+    case "list_meetings":
+    case "list_task_page": {
+      const { cursor } = p;
+      const scope = (p.scope || {}) as {
+        folder?: string;
+        tags?: string[];
+        people?: string[];
+        meetingIds?: string[];
+      };
+      const filterKey = JSON.stringify({
+        method,
+        query: String(p.query || "").trim(),
+        starred: p.starred ?? null,
+        includeDone: !!p.includeDone,
+        scope: {
+          folder: scope.folder || undefined,
+          tags: [...new Set(scope.tags || [])].sort(),
+          people: [...new Set(scope.people || [])].sort(),
+          meetingIds: [...new Set(scope.meetingIds || [])].sort(),
+        },
+      });
+      let offset = 0;
+      if (cursor) {
+        let value;
+        try {
+          value = JSON.parse(String(cursor));
+        } catch {
+          throw new Error(
+            "This library page could not be read. Try loading it again.",
+          );
+        }
+        if (
+          value.generation !== previewGeneration ||
+          value.filter !== filterKey
+        )
+          throw new EngineCallError(
+            "Your library changed. Loading its latest page.",
+            "cursor_stale",
+          );
+        offset = value.offset;
+      }
+      const query = String(p.query || "")
+        .trim()
+        .replace(/[A-Z]/g, (c) => c.toLowerCase());
+      const matches = data.meetings
+        .filter(
+          (m) =>
+            (!scope.folder || m.folder === scope.folder) &&
+            (!scope.tags?.length ||
+              scope.tags.every((t) => m.tags?.includes(t))) &&
+            (!scope.people?.length ||
+              scope.people.every((t) => m.people?.includes(t))) &&
+            (!scope.meetingIds?.length || scope.meetingIds.includes(m.id)) &&
+            (p.starred === undefined || m.starred === p.starred) &&
+            (!query ||
+              [
+                m.title,
+                m.notes,
+                m.summary,
+                ...m.segments.map((s) => s.text),
+              ].some((text) =>
+                text.replace(/[A-Z]/g, (c) => c.toLowerCase()).includes(query),
+              )),
+        )
+        .sort(
+          (a, b) =>
+            b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+        );
+      const tasks = method === "list_task_page";
+      const items = tasks
+        ? matches
+            .flatMap((m) =>
+              (m.tasks || [])
+                .filter((t) => p.includeDone || !t.done)
+                .map((t) => ({ ...t, meetingId: m.id, meetingTitle: m.title })),
+            )
+            .sort(
+              (a, b) =>
+                Number(a.done) - Number(b.done) ||
+                (a.dueDate || "9999").localeCompare(b.dueDate || "9999") ||
+                a.createdAt.localeCompare(b.createdAt) ||
+                a.meetingId.localeCompare(b.meetingId) ||
+                a.id.localeCompare(b.id),
+            )
+        : matches.map(meetingHeader);
+      const limit = Math.min(100, Math.max(1, Number(p.limit || 50)));
+      return {
+        [tasks ? "tasks" : "meetings"]: structuredClone(
+          items.slice(offset, offset + limit),
+        ),
+        total: items.length,
+        nextCursor:
+          offset + limit < items.length
+            ? JSON.stringify({
+                generation: previewGeneration,
+                filter: filterKey,
+                offset: offset + limit,
+              })
+            : null,
+      };
+    }
     case "get_status":
       return previewStatus;
     case "get_settings":
@@ -300,6 +447,15 @@ function previewCall(method: string, p: Record<string, unknown>): unknown {
       );
   }
 }
+export class EngineCallError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+  ) {
+    super(message);
+    this.name = "EngineCallError";
+  }
+}
 export async function call<T>(
   method: string,
   params: Record<string, unknown> = {},
@@ -312,14 +468,20 @@ export async function call<T>(
       if (typeof err === "string") {
         try {
           const value = JSON.parse(err);
-          throw new Error(value.message ?? value.error?.message ?? err);
+          throw new EngineCallError(
+            value.message ?? value.error?.message ?? err,
+            value.code ?? value.error?.code,
+          );
         } catch (parsed) {
           if (parsed instanceof SyntaxError) throw new Error(err);
           throw parsed;
         }
       }
       if (err && typeof err === "object" && "message" in err)
-        throw new Error(String(err.message));
+        throw new EngineCallError(
+          String(err.message),
+          "code" in err ? String(err.code) : undefined,
+        );
       throw new Error(
         "The local engine did not respond. Your saved meetings are safe; restart Tuck and try again.",
       );

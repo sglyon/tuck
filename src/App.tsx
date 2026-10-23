@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type SetStateAction,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -45,6 +46,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useLibraryIndex } from "./lib/useLibraryIndex";
+import { meetingHeader, pruneDetails } from "./lib/library";
 import Settings from "./components/Settings";
 import {
   RetainedAudio,
@@ -77,7 +80,7 @@ import {
 } from "./lib/format";
 import type {
   Account,
-  Bootstrap,
+  LibraryBootstrap,
   EngineEvent,
   EngineStatus,
   ExportFormat,
@@ -227,7 +230,7 @@ function ConfirmDialog({
 }
 
 export default function App() {
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetings, commitMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<SettingsData>(defaults);
   const [status, setStatus] = useState<EngineStatus>(emptyStatus);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -284,6 +287,33 @@ export default function App() {
   };
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "starred">("all");
+  const library = useLibraryIndex(query, filter === "starred", scope);
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
+  const details = useRef<Meeting[]>([]);
+  const detailVersions = useRef(new Map<string, number>());
+  const detailUse = useRef(new Map<string, number>());
+  const detailClock = useRef(0);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const detailRequests = useRef(new Map<string, Promise<Meeting>>());
+  const operationOwners = useRef(new Set<string>());
+  const detailPins = useRef<() => Set<string>>(() => new Set());
+  const setMeetings = useCallback((update: SetStateAction<Meeting[]>) => {
+    const next =
+      typeof update === "function" ? update(details.current) : update;
+    details.current = pruneDetails(
+      next,
+      detailPins.current(),
+      detailUse.current,
+    );
+    commitMeetings(details.current);
+  }, []);
+  const bumpDetail = (id: string) =>
+    detailVersions.current.set(id, (detailVersions.current.get(id) || 0) + 1);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(
     null,
@@ -319,6 +349,18 @@ export default function App() {
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const chatRequest = useRef<string | null>(null);
+  detailPins.current = () =>
+    new Set(
+      [
+        selectedRef.current,
+        status.activeMeetingId,
+        ...pendingNotes.current.keys(),
+        ...pendingRecaps.current.keys(),
+        ...[...pendingCorrections.current.values()].map((d) => d.meetingId),
+        ...operationOwners.current,
+        chatBusy,
+      ].filter((id): id is string => !!id),
+    );
   const meeting = meetings.find((m) => m.id === selectedId) ?? null;
   const capture = meetings.find(
     (m) =>
@@ -335,21 +377,27 @@ export default function App() {
     setToast({ text, error });
     if (!error) toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
-  const merge = useCallback((m: Meeting) => {
-    setMeetings((prev) => {
-      const local = pendingNotes.current.get(m.id);
-      const next = {
-        ...m,
-        ...(local === undefined ? {} : { notes: local }),
-        ...(pendingRecaps.current.has(m.id)
-          ? { summary: pendingRecaps.current.get(m.id)! }
-          : {}),
-      };
-      return prev.some((p) => p.id === m.id)
-        ? prev.map((p) => (p.id === m.id ? next : p))
-        : [next, ...prev];
-    });
-  }, []);
+  const merge = useCallback(
+    (m: Meeting, mutated = true) => {
+      bumpDetail(m.id);
+      detailUse.current.set(m.id, ++detailClock.current);
+      library.upsert(meetingHeader(m), mutated);
+      setMeetings((prev) => {
+        const local = pendingNotes.current.get(m.id);
+        const next = {
+          ...m,
+          ...(local === undefined ? {} : { notes: local }),
+          ...(pendingRecaps.current.has(m.id)
+            ? { summary: pendingRecaps.current.get(m.id)! }
+            : {}),
+        };
+        return prev.some((p) => p.id === m.id)
+          ? prev.map((p) => (p.id === m.id ? next : p))
+          : [next, ...prev];
+      });
+    },
+    [library.upsert, setMeetings],
+  );
   const refreshStatus = useCallback(
     async () => setStatus(await call<EngineStatus>("get_status")),
     [],
@@ -358,22 +406,85 @@ export default function App() {
     setLoading(true);
     setBootError("");
     try {
-      const data = await call<Bootstrap>("bootstrap");
-      setMeetings(data.meetings);
+      const data = await call<LibraryBootstrap>("bootstrap_library", {
+        limit: 50,
+      });
+      library.install(data);
+      setMeetings([]);
       setSettings({ ...defaults, ...data.settings });
       setStatus(data.status);
       setAccounts(data.accounts);
-      setSelectedId((prev) =>
-        data.meetings.some((m) => m.id === prev)
-          ? prev
-          : (data.meetings[0]?.id ?? null),
+      setSelectedId(
+        (prev) =>
+          prev ||
+          data.library.activeMeetingId ||
+          data.meetingPage.meetings[0]?.id ||
+          null,
       );
     } catch (e) {
       setBootError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [library.install, setMeetings]);
+  const loadMeeting = useCallback(
+    async (id: string, force = false): Promise<Meeting> => {
+      const cached = details.current.find((m) => m.id === id);
+      detailUse.current.set(id, ++detailClock.current);
+      if (cached && !force) return cached;
+      const pending = detailRequests.current.get(id);
+      if (pending) return pending;
+      const request = (async () => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const version = detailVersions.current.get(id) || 0;
+          const m = await call<Meeting>("get_meeting", { meetingId: id });
+          if (version === (detailVersions.current.get(id) || 0)) {
+            merge(m, false);
+            return details.current.find((p) => p.id === id) || m;
+          }
+          const current = details.current.find((p) => p.id === id);
+          if (current) return current;
+        }
+        throw new Error("This conversation changed while opening. Try again.");
+      })();
+      detailRequests.current.set(id, request);
+      try {
+        return await request;
+      } finally {
+        if (detailRequests.current.get(id) === request)
+          detailRequests.current.delete(id);
+      }
+    },
+    [merge],
+  );
+  useEffect(() => {
+    if (loading || view !== "meeting" || !selectedId) return;
+    let current = true;
+    setDetailLoading(selectedId);
+    setDetailError(null);
+    void loadMeeting(selectedId)
+      .catch((e) => {
+        if (current)
+          setDetailError({
+            id: selectedId,
+            text: e instanceof Error ? e.message : String(e),
+          });
+      })
+      .finally(() => {
+        if (current) setDetailLoading(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [selectedId, view, loading, loadMeeting]);
+  useEffect(() => {
+    if (
+      !loading &&
+      status.activeMeetingId &&
+      status.activeMeetingId !== selectedId
+    )
+      void loadMeeting(status.activeMeetingId).catch(() => {});
+  }, [loading, status.activeMeetingId, selectedId, loadMeeting]);
   useEffect(() => {
     void bootstrap();
     let disposed = false;
@@ -388,10 +499,34 @@ export default function App() {
               notify(e instanceof Error ? e.message : String(e), true),
             );
           break;
-        case "meeting_updated":
-          merge(p.meeting as Meeting);
+        case "meeting_updated": {
+          const incoming = p.meeting as Meeting;
+          const previous = details.current.find((m) => m.id === incoming.id);
+          const speechOnly =
+            previous &&
+            ["recording", "paused", "processing"].includes(incoming.status) &&
+            JSON.stringify({
+              ...meetingHeader(previous),
+              duration: 0,
+              segmentCount: 0,
+              status: "",
+            }) ===
+              JSON.stringify({
+                ...meetingHeader(incoming),
+                duration: 0,
+                segmentCount: 0,
+                status: "",
+              }) &&
+            previous.notes === incoming.notes &&
+            previous.summary === incoming.summary &&
+            JSON.stringify(previous.tasks) === JSON.stringify(incoming.tasks);
+          merge(incoming, !speechOnly);
+          if (speechOnly) library.refresh(false);
           break;
+        }
         case "segment":
+          bumpDetail(String(p.meetingId));
+          library.refresh(false);
           setMeetings((prev) =>
             prev.map((m) =>
               m.id === p.meetingId
@@ -408,6 +543,11 @@ export default function App() {
           );
           break;
         case "recording_state":
+          library.patch(String(p.meetingId), {
+            status: p.state as Meeting["status"],
+          });
+          bumpDetail(String(p.meetingId));
+          library.refresh(false);
           if (
             [
               "draft",
@@ -487,7 +627,7 @@ export default function App() {
       disposed = true;
       cleanup?.();
     };
-  }, [bootstrap, merge, notify]);
+  }, [bootstrap, merge, notify, library.refresh, setMeetings]);
   useEffect(() => {
     if (!capture || capture.status !== "recording") return;
     const id = capture.id;
@@ -542,15 +682,22 @@ export default function App() {
   const run = async (name: string, fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(name);
+    const owner = selectedRef.current;
+    if (owner) operationOwners.current.add(owner);
     try {
       await fn();
     } catch (e) {
       notify(e instanceof Error ? e.message : String(e), true);
     } finally {
+      if (owner) operationOwners.current.delete(owner);
+      setMeetings((prev) => prev);
       setBusy(null);
     }
   };
   const choose = (id: string) => {
+    selectedRef.current = id;
+    detailUse.current.set(id, ++detailClock.current);
+    setMeetings((prev) => prev);
     setSelectedId(id);
     setEditingRecap(false);
     setView("meeting");
@@ -575,11 +722,13 @@ export default function App() {
       setTab("summary");
     });
   const update = async (id: string, changes: MeetingChanges) => {
+    bumpDetail(id);
     setMeetings((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...changes } : m)),
     );
     try {
-      await call<Meeting>("update_meeting", { id, changes });
+      const saved = await call<Meeting>("update_meeting", { id, changes });
+      library.upsert(meetingHeader(saved));
     } catch (e) {
       notify(e instanceof Error ? e.message : String(e), true);
       throw e;
@@ -593,9 +742,14 @@ export default function App() {
         .catch(() => false)
         .then(async () => {
           try {
-            await call("update_meeting", { id, changes: { notes } });
+            const saved = await call<Meeting>("update_meeting", {
+              id,
+              changes: { notes },
+            });
+            library.upsert(meetingHeader(saved));
             if (pendingNotes.current.get(id) === notes) {
               pendingNotes.current.delete(id);
+              setMeetings((prev) => prev);
               setNoteStates((v) => ({ ...v, [id]: "saved" }));
             }
             return true;
@@ -616,7 +770,7 @@ export default function App() {
       });
       return next;
     },
-    [notify],
+    [notify, library.upsert, setMeetings],
   );
   const saveRecap = useCallback(
     (id: string, summary: string): Promise<boolean> => {
@@ -625,9 +779,14 @@ export default function App() {
         .catch(() => false)
         .then(async () => {
           try {
-            await call("update_meeting", { id, changes: { summary } });
+            const saved = await call<Meeting>("update_meeting", {
+              id,
+              changes: { summary },
+            });
+            library.upsert(meetingHeader(saved));
             if (pendingRecaps.current.get(id) === summary) {
               pendingRecaps.current.delete(id);
+              setMeetings((prev) => prev);
               setRecapStates((v) => ({ ...v, [id]: "saved" }));
             }
             return true;
@@ -648,9 +807,10 @@ export default function App() {
       });
       return next;
     },
-    [notify],
+    [notify, library.upsert, setMeetings],
   );
   const changeRecap = (id: string, summary: string) => {
+    bumpDetail(id);
     setMeetings((prev) =>
       prev.map((m) => (m.id === id ? { ...m, summary } : m)),
     );
@@ -754,6 +914,7 @@ export default function App() {
     };
   }, [flushEdits, notify]);
   const changeNotes = (id: string, notes: string) => {
+    bumpDetail(id);
     setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, notes } : m)));
     pendingNotes.current.set(id, notes);
     setNoteStates((v) => ({ ...v, [id]: "saving" }));
@@ -907,9 +1068,11 @@ export default function App() {
       pendingNotes.current.delete(id);
       const timer = noteTimers.current.get(id);
       if (timer) clearTimeout(timer);
+      bumpDetail(id);
+      library.remove(id);
       setMeetings((prev) => prev.filter((m) => m.id !== id));
       if (selectedId === id)
-        setSelectedId(meetings.find((m) => m.id !== id)?.id ?? null);
+        setSelectedId(library.headers.find((m) => m.id !== id)?.id ?? null);
       notify("Conversation deleted from this device.");
     });
   };
@@ -984,8 +1147,8 @@ export default function App() {
     }
     if (intent === "record") {
       if (quickCapturePending.current) return;
-      if (capture) {
-        choose(capture.id);
+      if (capture || status.activeMeetingId) {
+        choose(capture?.id || status.activeMeetingId!);
         return;
       }
       if (!microphone && !systemAudio) {
@@ -1033,18 +1196,14 @@ export default function App() {
       }
     }
   };
+  const sourceIntent = useRef(0);
   const openSource = (url: string) => {
+    const intent = ++sourceIntent.current;
     try {
       const parsed = new URL(url);
       const id = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
-      const sourceMeeting = meetings.find((m) => m.id === id);
-      if (!sourceMeeting) {
-        notify("This source meeting is no longer in your library.", true);
-        return;
-      }
       choose(id);
       const source = parsed.searchParams.get("source");
-      const segmentId = parsed.searchParams.get("segment");
       setTab(
         source === "notes"
           ? "notes"
@@ -1054,40 +1213,40 @@ export default function App() {
               ? "tasks"
               : "transcript",
       );
-      const segment =
-        sourceMeeting.segments.find((s) => s.id === segmentId) ||
-        sourceMeeting.segments.find(
-          (s) => s.start >= Number(parsed.searchParams.get("start") || 0),
-        );
-      if (segment && (!source || source === "transcript")) {
-        setHighlight(segment.id);
-        setFollowLive(false);
-        setTimeout(
-          () =>
-            document
-              .getElementById(`segment-${segment.id}`)
-              ?.scrollIntoView({ behavior: "smooth", block: "center" }),
-          80,
-        );
-      }
+      void loadMeeting(id)
+        .then((sourceMeeting) => {
+          if (intent !== sourceIntent.current || selectedRef.current !== id)
+            return;
+          const segment =
+            sourceMeeting.segments.find(
+              (s) => s.id === parsed.searchParams.get("segment"),
+            ) ||
+            sourceMeeting.segments.find(
+              (s) => s.start >= Number(parsed.searchParams.get("start") || 0),
+            );
+          if (segment && (!source || source === "transcript")) {
+            setHighlight(segment.id);
+            setFollowLive(false);
+            setTimeout(() => {
+              if (selectedRef.current === id)
+                document
+                  .getElementById(`segment-${segment.id}`)
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 80);
+          }
+        })
+        .catch((e) => {
+          if (intent === sourceIntent.current && selectedRef.current === id)
+            setDetailError({
+              id,
+              text: e instanceof Error ? e.message : String(e),
+            });
+        });
     } catch {
       notify("This source link could not be opened.", true);
     }
   };
-  const shown = meetings
-    .filter(
-      (m) =>
-        (!scope.folder || m.folder === scope.folder) &&
-        (!scope.tag || m.tags?.includes(scope.tag)) &&
-        (!scope.person || m.people?.includes(scope.person)) &&
-        (filter !== "starred" || m.starred) &&
-        (!query.trim() ||
-          [m.title, m.notes, m.summary, ...m.segments.map((s) => s.text)]
-            .join(" ")
-            .toLowerCase()
-            .includes(query.toLowerCase())),
-    )
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const shown = library.headers;
   const groups = [...new Set(shown.map((m) => relativeGroup(m.createdAt)))];
   const visibleSegments =
     meeting?.segments.filter(
@@ -1127,92 +1286,97 @@ export default function App() {
       className={`app-shell mobile-${pane}${!assistantOpen ? " assistant-hidden" : ""}${view !== "meeting" ? " settings-active" : ""}`}
     >
       <aside className="sidebar" aria-label="Conversation library">
-        <div className="sidebar-brand">
-          <Brand />
-          {!native && <span className="preview-badge">PREVIEW</span>}
+        <div className="sidebar-tools">
+          <div className="sidebar-brand">
+            <Brand />
+            {!native && <span className="preview-badge">PREVIEW</span>}
+            <button
+              className="icon-button mobile-only"
+              aria-label="Close library"
+              onClick={() => setPane("document")}
+            >
+              <X size={18} />
+            </button>
+          </div>
           <button
-            className="icon-button mobile-only"
-            aria-label="Close library"
-            onClick={() => setPane("document")}
+            className="new-conversation"
+            onClick={create}
+            disabled={!!busy}
           >
-            <X size={18} />
-          </button>
-        </div>
-        <button className="new-conversation" onClick={create} disabled={!!busy}>
-          <Plus size={17} />
-          <span>New meeting</span>
-          <span className="new-shortcut" aria-hidden="true">
-            +
-          </span>
-        </button>
-        <label className="library-search">
-          <Search size={15} />
-          <input
-            ref={searchRef}
-            aria-label="Search conversations"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search anything…"
-          />
-          <kbd>⌘ K</kbd>
-        </label>
-        <nav className="library-nav" aria-label="Library filters">
-          <button
-            className={filter === "all" && view === "meeting" ? "selected" : ""}
-            onClick={() => {
-              setFilter("all");
-              setView("meeting");
-            }}
-          >
-            <Library size={16} />
-            <span>All conversations</span>
-            <span className="count">{meetings.length}</span>
-          </button>
-          <button
-            className={
-              filter === "starred" && view === "meeting" ? "selected" : ""
-            }
-            onClick={() => {
-              setFilter("starred");
-              setView("meeting");
-            }}
-          >
-            <Star size={16} />
-            <span>Starred</span>
-            {meetings.filter((m) => m.starred).length > 0 && (
-              <span className="count">
-                {meetings.filter((m) => m.starred).length}
-              </span>
-            )}
-          </button>
-          <button
-            className={view === "library" ? "selected" : ""}
-            onClick={() => {
-              setView("library");
-              setPane("document");
-            }}
-          >
-            <Search size={16} />
-            <span>Ask your library</span>
-          </button>
-          <button
-            className={view === "tasks" ? "selected" : ""}
-            onClick={() => {
-              setView("tasks");
-              setPane("document");
-            }}
-          >
-            <Check size={16} />
-            <span>Tasks</span>
-            <span className="count">
-              {
-                meetings.flatMap((m) => m.tasks || []).filter((t) => !t.done)
-                  .length
-              }
+            <Plus size={17} />
+            <span>New meeting</span>
+            <span className="new-shortcut" aria-hidden="true">
+              +
             </span>
           </button>
-        </nav>
-        <ScopeFilters meetings={meetings} scope={scope} onChange={setScope} />
+          <label className="library-search">
+            <Search size={15} />
+            <input
+              ref={searchRef}
+              aria-label="Search conversations"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search anything…"
+            />
+            <kbd>⌘ K</kbd>
+          </label>
+          <nav className="library-nav" aria-label="Library filters">
+            <button
+              className={
+                filter === "all" && view === "meeting" ? "selected" : ""
+              }
+              onClick={() => {
+                setFilter("all");
+                setView("meeting");
+              }}
+            >
+              <Library size={16} />
+              <span>All conversations</span>
+              <span className="count">{library.overview.meetingCount}</span>
+            </button>
+            <button
+              className={
+                filter === "starred" && view === "meeting" ? "selected" : ""
+              }
+              onClick={() => {
+                setFilter("starred");
+                setView("meeting");
+              }}
+            >
+              <Star size={16} />
+              <span>Starred</span>
+              {library.overview.starredCount > 0 && (
+                <span className="count">{library.overview.starredCount}</span>
+              )}
+            </button>
+            <button
+              className={view === "library" ? "selected" : ""}
+              onClick={() => {
+                setView("library");
+                setPane("document");
+              }}
+            >
+              <Search size={16} />
+              <span>Ask your library</span>
+            </button>
+            <button
+              className={view === "tasks" ? "selected" : ""}
+              onClick={() => {
+                setView("tasks");
+                setPane("document");
+              }}
+            >
+              <Check size={16} />
+              <span>Tasks</span>
+              <span className="count">{library.overview.openTaskCount}</span>
+            </button>
+          </nav>
+          <ScopeFilters
+            library={library.overview}
+            scope={scope}
+            onChange={setScope}
+          />
+        </div>
         <div className="meeting-list">
           <UpcomingMeetings merge={merge} choose={choose} notify={notify} />
 
@@ -1255,7 +1419,34 @@ export default function App() {
                 ))}
             </section>
           ))}
-          {!shown.length && (
+          {library.loading && (
+            <p className="library-load-state" role="status">
+              <LoaderCircle size={14} className="spin" />
+              Loading conversations…
+            </p>
+          )}
+          {library.notice && (
+            <p className="library-load-state" role="status">
+              {library.notice}
+            </p>
+          )}
+          {library.error && (
+            <div className="library-load-state" role="alert">
+              <p>{library.error}</p>
+              <button className="text-link" onClick={() => void library.load()}>
+                Try again
+              </button>
+            </div>
+          )}
+          {library.cursor && !library.loading && (
+            <button
+              className="library-load-more"
+              onClick={() => void library.load(true)}
+            >
+              Load more conversations
+            </button>
+          )}
+          {!shown.length && !library.loading && !library.error && (
             <div className="library-empty">
               <Folder size={22} strokeWidth={1.4} />
               <p>
@@ -1372,11 +1563,15 @@ export default function App() {
               onAccounts={setAccounts}
               onStatus={refreshStatus}
               notify={notify}
-              meetingCount={meetings.length}
+              meetingCount={library.overview.meetingCount}
               beforeFileOperation={() => flushEdits()}
               onLibraryChanged={async () => {
-                const data = await call<Bootstrap>("bootstrap");
-                setMeetings(data.meetings);
+                const data = await call<LibraryBootstrap>("bootstrap_library", {
+                  limit: 50,
+                });
+                setMeetings([]);
+                detailVersions.current.clear();
+                library.install(data);
                 setSettings({ ...defaults, ...data.settings });
                 setStatus(data.status);
                 setAccounts(data.accounts);
@@ -1388,13 +1583,55 @@ export default function App() {
             <LibraryDesk
               key={JSON.stringify(scope)}
               mode={view}
-              meetings={meetings}
+              library={library.overview}
+              revision={library.revision}
               settings={settings}
               scope={scope}
               onSource={openSource}
               merge={merge}
               notify={notify}
             />
+          </div>
+        ) : selectedId && !meeting ? (
+          <div
+            className="meeting-load-state"
+            role={detailError?.id === selectedId ? "alert" : "status"}
+          >
+            {detailError?.id === selectedId ? (
+              <>
+                <h2>This conversation could not be opened.</h2>
+                {detailError.text !==
+                  "This conversation could not be opened." && (
+                  <p>{detailError.text}</p>
+                )}
+                <button
+                  className="button secondary compact"
+                  onClick={() => {
+                    setDetailError(null);
+                    setDetailLoading(selectedId);
+                    void loadMeeting(selectedId, true)
+                      .catch((e) =>
+                        setDetailError({
+                          id: selectedId,
+                          text: e instanceof Error ? e.message : String(e),
+                        }),
+                      )
+                      .finally(() => setDetailLoading(null));
+                  }}
+                >
+                  Try again
+                </button>
+              </>
+            ) : (
+              <>
+                <LoaderCircle size={22} className="spin" />
+                <p>
+                  {detailLoading === selectedId
+                    ? "Opening conversation…"
+                    : "Opening conversation…"}
+                </p>
+              </>
+            )}
           </div>
         ) : !meeting ? (
           <div className="welcome">
@@ -1579,15 +1816,16 @@ export default function App() {
                   aria-label="Conversation title"
                   value={meeting.title}
                   maxLength={200}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    bumpDetail(meeting.id);
                     setMeetings((prev) =>
                       prev.map((m) =>
                         m.id === meeting.id
                           ? { ...m, title: e.target.value }
                           : m,
                       ),
-                    )
-                  }
+                    );
+                  }}
                   onBlur={(e) => {
                     const title =
                       e.target.value.trim() || "Untitled conversation";
@@ -1634,7 +1872,7 @@ export default function App() {
                     <span>
                       Recovered into a separate meeting. The original was kept.
                     </span>
-                    {meetings.some((m) => m.id === meeting.recoveredFrom) && (
+                    {meeting.recoveredFrom && (
                       <button
                         className="text-link"
                         onClick={() => choose(meeting.recoveredFrom!)}
@@ -1738,7 +1976,10 @@ export default function App() {
                       <button
                         className="button primary compact"
                         disabled={
-                          !!busy || (!microphone && !systemAudio) || !!capture
+                          !!busy ||
+                          (!microphone && !systemAudio) ||
+                          !!capture ||
+                          !!status.activeMeetingId
                         }
                         onClick={
                           status.modelInstalled

@@ -1,8 +1,10 @@
+import { installLeanLibraryPort } from "./support/lean-library";
 import { test, expect, type Page } from "@playwright/test";
 import { exampleMeeting } from "../../src/lib/example";
 import { defaults } from "../../src/lib/bridge";
 
 async function safetyPort(page: Page, duplicateSegments = false) {
+  await installLeanLibraryPort(page);
   const meeting = exampleMeeting();
   meeting.isExample = false;
   meeting.status = "interrupted";
@@ -452,4 +454,33 @@ test("correction drafts belong to a meeting and segment together", async ({
   await expect(segment.locator(".segment-body > p")).toHaveText(
     first.segments[0].text,
   );
+});
+
+test("restore reapplies an existing library query instead of displaying unfiltered headers", async ({
+  page,
+}) => {
+  await safetyPort(page);
+  await page
+    .getByRole("textbox", { name: "Search conversations", exact: true })
+    .fill("No such saved conversation");
+  await expect(page.locator(".meeting-item")).toHaveCount(0);
+  await expect(
+    page.getByText("No conversations found.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("tab", { name: "Privacy", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Choose backup…", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Merge backup", exact: true }).click();
+  await expect(
+    page.getByText("Restore complete", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Search conversations", exact: true }),
+  ).toHaveValue("No such saved conversation");
+  await expect(
+    page.getByText("No conversations found.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".meeting-item")).toHaveCount(0);
 });

@@ -1,3 +1,4 @@
+import { installLeanLibraryPort } from "./support/lean-library";
 import { test, expect } from "@playwright/test";
 import { exampleMeeting } from "../../src/lib/example";
 import { defaults } from "../../src/lib/bridge";
@@ -87,4 +88,9 @@ test("native import offers supported formats, preserves the selected path and ex
     ),
   ).toBeVisible();
   expect(await page.evaluate(() => (window as any).__audioSourceCalls)).toBe(0);
+});
+
+// Shared fixture compatibility; production exclusively uses the lean protocol.
+test.beforeEach(async ({ page }) => {
+  await installLeanLibraryPort(page);
 });

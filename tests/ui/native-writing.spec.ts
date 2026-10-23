@@ -1,3 +1,4 @@
+import { installLeanLibraryPort } from "./support/lean-library";
 import { test, expect } from "@playwright/test";
 import { exampleMeeting } from "../../src/lib/example";
 import { defaults } from "../../src/lib/bridge";
@@ -422,4 +423,9 @@ test("quick recording respects selected sources, coalesces rapid intents, and hi
   await expect
     .poll(() => page.evaluate(() => (window as any).__hiddenNotes))
     .toBe("Save before hiding.");
+});
+
+// Shared fixture compatibility; production exclusively uses the lean protocol.
+test.beforeEach(async ({ page }) => {
+  await installLeanLibraryPort(page);
 });

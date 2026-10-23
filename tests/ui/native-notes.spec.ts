@@ -1,3 +1,4 @@
+import { installLeanLibraryPort } from "./support/lean-library";
 import { expect, test, type Page } from "@playwright/test";
 import { exampleMeeting } from "../../src/lib/example";
 import { defaults } from "../../src/lib/bridge";
@@ -162,4 +163,9 @@ test("recap writes stay ordered and closing flushes both editors", async ({
   expect(await page.evaluate(() => (window as any).__closedRecap)).toBe(
     "Newest recap",
   );
+});
+
+// Shared fixture compatibility; production exclusively uses the lean protocol.
+test.beforeEach(async ({ page }) => {
+  await installLeanLibraryPort(page);
 });

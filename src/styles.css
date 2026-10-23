@@ -4248,3 +4248,107 @@ mark {
     min-height: 36px;
   }
 }
+
+.library-load-state,
+.loading-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.library-load-state {
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+.library-load-state p {
+  margin: 0;
+  width: 100%;
+}
+.library-load-more {
+  display: block;
+  margin: 12px auto 18px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 9px 12px;
+}
+.library-load-more:hover {
+  text-decoration: underline;
+}
+.inline-retry {
+  margin: 16px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.load-more {
+  margin: 18px 0;
+}
+.load-more span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.scope-filters input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+.scope-filters .quiet-note {
+  grid-column: 1 / -1;
+  margin: 2px 0;
+  font-size: 12px;
+}
+.meeting-load-state {
+  min-height: 340px;
+  padding: 56px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--muted);
+}
+.meeting-load-state h2 {
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 600;
+}
+.meeting-load-state p {
+  margin: 0 0 8px;
+  max-width: 46ch;
+  line-height: 1.6;
+}
+
+/* Expanded filters scroll within their own region; results and recovery stay usable. */
+.sidebar-tools {
+  display: contents;
+}
+@media (max-width: 700px) {
+  .sidebar-tools {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 60%;
+    overflow-y: auto;
+    flex: 0 1 auto;
+  }
+  .sidebar-tools > * {
+    flex-shrink: 0;
+  }
+  .meeting-list {
+    min-height: 140px;
+  }
+}
