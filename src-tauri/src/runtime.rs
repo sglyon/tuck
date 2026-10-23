@@ -110,7 +110,7 @@ impl DesktopRuntime {
                 self.reminders.status(enabled)
             }
             "shutdown" | "quit_app" => {
-                let _ = self.notion_auth.cancel();
+                let _ = self.notion_auth.cancel_pending();
                 // Stop/drain hardware before waiting on an already-sent AI request.
                 // Core shutdown first invalidates monitoring so its late result is discarded.
                 let stopped = self.service.handle("shutdown", json!({}));
@@ -209,6 +209,7 @@ impl DesktopRuntime {
 
 impl Drop for DesktopRuntime {
     fn drop(&mut self) {
+        let _ = self.notion_auth.cancel_pending();
         // Close capture promptly, then retain the application while joining AI work.
         let _ = self.service.handle("shutdown", serde_json::json!({}));
         let _ = self.coaching.shutdown();

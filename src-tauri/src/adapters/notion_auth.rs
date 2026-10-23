@@ -476,10 +476,11 @@ impl NotionAuth {
         result
     }
     pub fn cancel(&self) -> Result<Value> {
-        self.invalidate()?;
+        self.cancel_pending()?;
         self.status()
     }
-    fn invalidate(&self) -> Result<()> {
+    /// Lifecycle cancellation only: never read/decrypt credentials or request status.
+    pub fn cancel_pending(&self) -> Result<()> {
         let mut state = self
             .state
             .lock()
@@ -779,6 +780,46 @@ mod tests {
                 }
             );
         }
+    }
+    #[test]
+    fn lifecycle_cancellation_never_opens_secrets_and_wakes_the_pending_flow() {
+        struct NoSecretAccess;
+        impl SecretPort for NoSecretAccess {
+            fn get(&self, _: &str) -> Result<Option<String>> {
+                panic!("Lifecycle cancellation must not decrypt credentials")
+            }
+            fn set(&self, _: &str, _: &str) -> Result<()> {
+                panic!("Canceled authorization must not write credentials")
+            }
+            fn delete(&self, _: &str) -> Result<()> {
+                panic!("Lifecycle cancellation must not remove credentials")
+            }
+        }
+        let auth = Arc::new(
+            NotionAuth::with_broker(Arc::new(NoSecretAccess), Some("https://auth.example.com"))
+                .unwrap(),
+        );
+        auth.state.lock().unwrap().connecting = true;
+        let pending = auth.clone();
+        let (entered, waiting) = std::sync::mpsc::channel();
+        let flow = std::thread::spawn(move || {
+            let state = pending.state.lock().unwrap();
+            entered.send(()).unwrap();
+            let (state, timeout) = pending
+                .wake
+                .wait_timeout_while(state, Duration::from_secs(60), |s| s.connecting)
+                .unwrap();
+            (state.generation, state.connecting, timeout.timed_out())
+        });
+        waiting.recv_timeout(Duration::from_secs(2)).unwrap();
+        let before = Instant::now();
+        auth.cancel_pending().unwrap();
+        assert_eq!(flow.join().unwrap(), (1, false, false));
+        assert!(before.elapsed() < Duration::from_secs(1));
+        assert!(auth.current(0).is_err());
+        assert!(auth.save_if_current(0, &stored()).is_err());
+        auth.cancel_pending().unwrap();
+        assert_eq!(auth.state.lock().unwrap().generation, 2);
     }
     #[test]
     fn repeated_connect_generations_cannot_replace_the_latest_flow() {
