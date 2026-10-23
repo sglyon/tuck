@@ -7,7 +7,7 @@ This extends the competitive research in [research.md](research.md). Implemented
 | Need | Implementation | Limit |
 | --- | --- | --- |
 | Quick capture | Persistent tray, explicit record shortcut, setup gating, save before hide/quit | No automatic detection of meeting apps or ambient recording |
-| Meeting context | Read-only macOS EventKit connection, upcoming events, prepare title/attendees, portable ICS import | Device calendar needs explicit permission; ICS is a snapshot without recurrence expansion; no direct Google/Outlook OAuth |
+| Meeting context | Read-only macOS EventKit connection, persistent next meeting, atomic occurrence preparation, optional five-minute reminders, portable ICS import | Device calendar and native notification delivery need platform acceptance; reminders never record or join; ICS is a snapshot without recurrence expansion; no direct Google/Outlook OAuth |
 | Capture confidence | Device selection, preflight readiness, explicit five-second sound check, silence warnings | Real microphones/system capture and permission behavior still need hardware qualification |
 | Human-owned notes | Separate editable recap/notes, reviewable AI proposals, conflict guards, periodic manual checkpoints and exact pre-replacement versions | AI output still needs review; transcript corrections preserve the original speech separately |
 | Reusable work | Meaningful built-in/custom recap templates and saved recipes | Recipes produce reviewable text; they do not send external messages |
@@ -23,10 +23,12 @@ Notion updates preserve content outside marker-verified Tuck sections. A complet
 
 The subsequent library-safety increment implements retained-audio playback, guarded transcript corrections/reset with original speech preserved, linked recovery workspaces and portable ZIP backup/preview/merge restore. Its UI review meets the floor at 32/40, 31/40 and 32/40. An isolated native integration check made 131 requests with real Parakeet/public speech and verified exact audio bytes after restore, stale correction/fingerprint rejection and preservation of current edits on repeat restore. See `benchmarks/native-workflow/library-safety.json`, [safety contract](library-safety-contract.md) and [UI review](safety-ui-review.md).
 
+Meeting-day preparation and optional reminders are implemented in the next slice. Reopening an occurrence preserves its original workspace; reminder claims and dismissal survive restart. Bounded cached schedules and delivery state stay outside portable backups, and restore cannot enable reminders. Independent Impeccable review scored the changed interface33/40. Generated-calendar native integration verifies preparation, restart, dismissal and backup privacy without accessing personal calendars or OS permissions. See [meeting-day contract](meeting-day-contract.md), [native behavior](meeting-day-native.md) and [UI review](meeting-day-ui-review.md). Actual OS notification presentation remains unqualified.
+
 Broader file import is also implemented: PCM WAV, MP3, FLAC and AAC-LC stream through bounded local conversion without modifying the selected source. Codec fixtures and a public AAC-to-Parakeet integration passed. AAC edit-list trimming remains unsupported, so priming/padding is retained. See [audio import](native-audio-import.md).
 
 1. Custom vocabulary with a validated recognition path. The [acoustic qualification](vocabulary-qualification.md) corrected names but also inserted one into ordinary speech, so it remains a developer prototype. [Backend evaluation](vocabulary-evaluation.md) records the remaining requirements.
-2. Meeting-app detection/reminders, persistent voice identity and better overlap/echo handling, each with realistic privacy and accuracy checks.
+2. Automatic meeting-app detection, persistent voice identity and better overlap/echo handling, each with realistic privacy and accuracy checks.
 3. Native mobile capture and device continuity; hosted synchronization/sharing require account ownership, offline conflicts and retention decisions.
 4. Optional cross-application dictation and snippets, once the primary meeting workflow is reliable.
 

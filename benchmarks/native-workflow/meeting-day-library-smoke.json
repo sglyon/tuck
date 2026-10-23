@@ -1,0 +1,42 @@
+{
+  "verifiedAt": "2026-10-23T16:30:41.406Z",
+  "engineSha256": "a6bb7f6c42313037e10d28f36d61aa0ff2a57f193751a2ff58ab38588086eee3",
+  "fixture": {
+    "meetings": 120,
+    "segments": 1200,
+    "transcriptDocumentBytes": 662797,
+    "synthetic": true
+  },
+  "hardware": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "ramBytes": 34359738368,
+    "cpu": "Apple M6"
+  },
+  "requests": 21,
+  "lean": {
+    "responseBytes": 27444,
+    "launchToResponseMs": 24.629292000000078,
+    "requestMs": 24.523541999999907,
+    "rustRssAfterResponseBytes": null
+  },
+  "full": null,
+  "selectedDetail": {
+    "responseBytes": 10150,
+    "requestMs": 0.5401249999999891
+  },
+  "checks": [
+    "bounded first-page payload without transcript, notes or recap bodies",
+    "all pages include every meeting once in deterministic timestamp-tie order",
+    "global facets, task inbox, starred and transcript search include off-page meetings",
+    "on-demand details, correction-aware search, stale cursors and request bounds",
+    "startup and unrelated selection do not decode an unselected malformed transcript"
+  ],
+  "caveats": [
+    "Diagnostic Rust composition only; excludes WebKit, speech models, local LLM and video calls.",
+    "RSS sampled after first response, not peak memory or total machine use.",
+    "Single-run timings with shared OS caches; not cold-start or minimum-spec qualification.",
+    "Selected meetings still load their complete transcript."
+  ],
+  "minimum16GBRealCallQualified": false
+}

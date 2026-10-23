@@ -30,7 +30,7 @@ Automatic recap generation is opt-in. Personal notes are never replaced by an AI
 
 ## A meeting day
 
-Use the tray menu or **⌘/Ctrl ⇧ R** to start a meeting. The shortcut checks setup first; opening or importing a calendar event never starts recording. Connect the device calendar on macOS or import a local `.ics` snapshot to prepare a title and attendees. Audio settings include device selection and an explicit five-second sound check that does not save or transcribe audio.
+Use the tray menu or **⌘/Ctrl ⇧ R** to start a meeting. The shortcut checks setup first; opening or importing a calendar event never starts recording. Connect the device calendar on macOS or import a local `.ics` snapshot. Next meeting opens preparation notes with the title and attendees; returning to the same occurrence reuses your existing notes. Optional five-minute reminders appear in Tuck, with system notifications where available while the app is running. Reminders stay quiet during recording, and never join a call or start capture. Calendar snapshots remain on this device and are excluded from portable backups. Audio settings include device selection and an explicit five-second sound check that does not save or transcribe audio.
 
 Recaps and personal notes are separately editable. Saved templates shape recaps; recipes run repeatable questions or prepare a proposed rewrite for review. Proposals preserve intervening edits. History keeps periodic checkpoints of manual edits and the text before accepted replacements, with prior versions available to restore. Add actions with owners and due dates, then use the task inbox to follow through across meetings.
 

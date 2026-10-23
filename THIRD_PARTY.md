@@ -12,7 +12,8 @@ Tuck is an independent application. It is not affiliated with NVIDIA, OpenAI, No
 - **Silero VAD**: [snakers4/silero-vad](https://github.com/snakers4/silero-vad), MIT. Speech activity model downloaded as part of local transcription setup.
 - **3D-Speaker / CAMPPlus**: [modelscope/3D-Speaker](https://github.com/modelscope/3D-Speaker). Optional English VoxCeleb speaker embedding model, distributed by Sherpa-ONNX. See the upstream project and model's terms. It produces anonymous voice embeddings; Tuck uses it for provisional meeting-scoped labels.
 - **ONNX Runtime**: [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime), MIT.
-- **Tauri**: [tauri-apps/tauri](https://github.com/tauri-apps/tauri), MIT / Apache 2.0.
+- **Tauri**: [tauri-apps/tauri](https://github.com/tauri-apps/tauri), MIT / Apache 2.0. The maintained [notification plugin](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/notification) supplies Windows/Linux notification delivery.
+- **objc2 / block2 / UserNotifications bindings**: [madsmtm/objc2](https://github.com/madsmtm/objc2). Maintained Rust bindings supply in-process macOS notification authorization and delivery; block2 is MIT and the framework bindings offer Zlib / Apache 2.0 / MIT. Exact versions and checksums are in `src-tauri/Cargo.lock`.
 - **React**: [facebook/react](https://github.com/facebook/react), MIT.
 - **Lucide**: [lucide-icons/lucide](https://github.com/lucide-icons/lucide), ISC.
 - **Python reference implementation only**: Python (PSF), NumPy, python-soxr/libsoxr, PortAudio, sounddevice, SoundCard, HTTPX, PyJWT, cryptography, keyring and the former PyInstaller packaging are retained for tests and historical comparison under `engine/`. They are not bundled or launched by the production native build. See dependency metadata for their licenses.

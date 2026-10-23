@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-23T16:30:41.404Z",
+  "engineSha256": "a6bb7f6c42313037e10d28f36d61aa0ff2a57f193751a2ff58ab38588086eee3",
+  "requests": 30,
+  "checks": [
+    "diagnostic host has no notification worker or permission path; default off and generic preference bypass rejected",
+    "native ICS import filters ended/all-day/old starts; atomic preparation reuses and preserves notes while separating recurrence",
+    "SQLite v4 restart preserves snapshot, workspace identity and durable dismissal across snapshot replacement; solo/future events do not nag",
+    "portable backup excludes cached calendar and reminder state, resets opt-in, and retains explicitly prepared notes",
+    "300-entry native ICS import stores only earliest256 and remains bounded across restart"
+  ],
+  "generatedCalendarOnly": true,
+  "disposablePreferenceSeedOnly": true,
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "calendarContentsAccess": false,
+  "notificationAuthorizationRequested": false,
+  "notificationDeliveryAttempted": false,
+  "externalProviderAccess": false
+}
