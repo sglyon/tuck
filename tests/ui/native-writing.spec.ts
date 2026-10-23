@@ -336,7 +336,7 @@ test("quick recording respects selected sources, coalesces rapid intents, and hi
       const state = window as any;
       let saved = meeting;
       let callbackId = 0;
-      let engineListener = 0;
+      const engineListeners = new Set<number>();
       const callbacks = new Map();
       state.__creates = 0;
       state.__starts = 0;
@@ -353,8 +353,12 @@ test("quick recording respects selected sources, coalesces rapid intents, and hi
         },
         async invoke(command: string, args: any) {
           if (command === "plugin:event|listen") {
-            if (args.event === "engine-event") engineListener = args.handler;
+            if (args.event === "engine-event") engineListeners.add(args.handler);
             return args.handler;
+          }
+          if (command === "plugin:event|unlisten") {
+            if (args.event === "engine-event") engineListeners.delete(args.eventId);
+            return;
           }
           if (command !== "engine_call") return;
           switch (args.method) {
@@ -365,6 +369,9 @@ test("quick recording respects selected sources, coalesces rapid intents, and hi
                 accounts: [],
                 status: { modelInstalled: true, captureAvailable: true },
               };
+            case "get_live_coach":
+              if (args.params.meetingId !== saved.id) throw "Choose an available fixture meeting.";
+              return { enabled: false, status: ["complete", "interrupted"].includes(saved.status) ? "stopped" : "off", message: null, selectedAgentIds: [], suggestions: [] };
             case "capture_readiness":
               await new Promise((r) => setTimeout(r, 100));
               return {
@@ -396,12 +403,14 @@ test("quick recording respects selected sources, coalesces rapid intents, and hi
           }
         },
       };
-      state.__intent = (intent: string) =>
-        callbacks.get(engineListener)?.({
-          event: "engine-event",
-          id: engineListener,
-          payload: { event: "desktop_intent", payload: { intent } },
-        });
+      state.__intent = (intent: string) => {
+        for (const id of engineListeners)
+          callbacks.get(id)?.({
+            event: "engine-event",
+            id,
+            payload: { event: "desktop_intent", payload: { intent } },
+          });
+      };
     },
     { meeting, settings: defaults },
   );

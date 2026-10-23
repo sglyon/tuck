@@ -136,7 +136,14 @@ export async function installMeetingDay(
             ]);
             return args.handler;
           }
-          if (command === "plugin:event|unlisten") return;
+          if (command === "plugin:event|unlisten") {
+            listeners.set(
+              args.event,
+              (listeners.get(args.event) || []).filter((id) => id !== args.eventId),
+            );
+            callbacks.delete(args.eventId);
+            return;
+          }
           if (command !== "engine_call") {
             w.__meetingDayUnexpected.push(command);
             throw new Error(`Unsupported fixture command: ${command}`);
@@ -166,6 +173,19 @@ export async function installMeetingDay(
               total: db.meetings.length,
             };
           if (method === "library_overview") return overview();
+          if (method === "get_live_coach") {
+            const meeting = db.meetings.find((m: any) => m.id === p.meetingId);
+            if (!meeting) throw new Error("Choose an available fixture meeting.");
+            return {
+              enabled: false,
+              status: ["complete", "interrupted"].includes(meeting.status)
+                ? "stopped"
+                : "off",
+              message: null,
+              selectedAgentIds: [],
+              suggestions: [],
+            };
+          }
           if (method === "get_meeting_day") {
             if (options.failDayAfterFirst && dayRequests++ > 0)
               throw new Error("Illustrative cached-day refresh failure");

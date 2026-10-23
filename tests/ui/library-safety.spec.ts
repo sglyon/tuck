@@ -30,7 +30,7 @@ async function safetyPort(page: Page, duplicateSegments = false) {
           : []),
       ];
       let callbackId = 0;
-      let engineListener = 0;
+      const engineListeners = new Set<number>();
       const callbacks = new Map();
       state.__fileCalls = [];
       state.__hidden = 0;
@@ -51,7 +51,7 @@ async function safetyPort(page: Page, duplicateSegments = false) {
         },
         async invoke(command: string, args: any) {
           if (command === "plugin:event|listen") {
-            if (args.event === "engine-event") engineListener = args.handler;
+            if (args.event === "engine-event") engineListeners.add(args.handler);
             return args.handler;
           }
           if (command === "plugin:dialog|save") {
@@ -61,6 +61,10 @@ async function safetyPort(page: Page, duplicateSegments = false) {
           if (command === "plugin:dialog|open") {
             state.__fileCalls.push("open-picker");
             return "/tmp/tuck-test-backup.zip";
+          }
+          if (command === "plugin:event|unlisten") {
+            if (args.event === "engine-event") engineListeners.delete(args.eventId);
+            return;
           }
           if (command !== "engine_call") return;
           const p = args.params;
@@ -74,6 +78,9 @@ async function safetyPort(page: Page, duplicateSegments = false) {
                 accounts: [],
                 status: { modelInstalled: true, captureAvailable: false },
               };
+            case "get_live_coach":
+              if (!current()) throw "Choose an available fixture meeting.";
+              return { enabled: false, status: ["complete", "interrupted"].includes(current().status) ? "stopped" : "off", message: null, selectedAgentIds: [], suggestions: [] };
             case "update_meeting":
               state.__fileCalls.push("save-draft");
               await new Promise((r) => setTimeout(r, 90));
@@ -166,12 +173,14 @@ async function safetyPort(page: Page, duplicateSegments = false) {
           }
         },
       };
-      state.__intent = (intent: string) =>
-        callbacks.get(engineListener)?.({
-          event: "engine-event",
-          id: engineListener,
-          payload: { event: "desktop_intent", payload: { intent } },
-        });
+      state.__intent = (intent: string) => {
+        for (const id of engineListeners)
+          callbacks.get(id)?.({
+            event: "engine-event",
+            id,
+            payload: { event: "desktop_intent", payload: { intent } },
+          });
+      };
     },
     { meeting, settings: defaults, duplicateSegments },
   );

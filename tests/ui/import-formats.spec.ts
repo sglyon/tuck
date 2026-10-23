@@ -11,6 +11,7 @@ test("native import offers supported formats, preserves the selected path and ex
   await page.addInitScript(
     ({ meeting, settings }) => {
       const state = window as any;
+      const meetings: typeof meeting[] = [];
       state.__importOptions = null;
       state.__importParams = null;
       state.__audioSourceCalls = 0;
@@ -31,14 +32,20 @@ test("native import offers supported formats, preserves the selected path and ex
           if (command !== "engine_call") return 1;
           if (args.method === "bootstrap")
             return {
-              meetings: [],
+              meetings,
               settings,
               accounts: [],
               status: { modelInstalled: true, captureAvailable: false },
             };
           if (args.method === "import_audio") {
             state.__importParams = args.params;
+            meetings.push(meeting);
             return meeting;
+          }
+          if (args.method === "get_live_coach") {
+            const selected = meetings.find((m) => m.id === args.params.meetingId);
+            if (!selected) throw "Choose an available fixture meeting.";
+            return { enabled: false, status: ["complete", "interrupted"].includes(selected.status) ? "stopped" : "off", message: null, selectedAgentIds: [], suggestions: [] };
           }
           if (args.method === "meeting_audio")
             return [
