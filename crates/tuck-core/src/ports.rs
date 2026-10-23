@@ -151,6 +151,22 @@ pub trait Repository {
     fn latest_revision_info(&mut self, id: &str, target: &str) -> Result<Option<Value>>;
     /// Return only bounded lexical evidence; never materialize the whole library transcript.
     fn search(&mut self, query: &crate::domain::SearchQuery) -> Result<Vec<Value>>;
+    /// Lookup only; the application owns atomic preparation and creation.
+    fn calendar_meeting(&mut self, event: &crate::domain::CalendarEvent)
+        -> Result<Option<Meeting>>;
+    /// Summary lookup for bounded calendar lists; must not hydrate notes/evidence.
+    fn calendar_meeting_id(
+        &mut self,
+        event: &crate::domain::CalendarEvent,
+    ) -> Result<Option<String>>;
+    fn calendar_snapshots(&mut self) -> Result<Vec<crate::meeting_day::CalendarSnapshot>>;
+    fn save_calendar_snapshot(
+        &mut self,
+        snapshot: &crate::meeting_day::CalendarSnapshot,
+    ) -> Result<()>;
+    fn reminder_state(&mut self, key: &str) -> Result<Option<crate::meeting_day::ReminderState>>;
+    fn save_reminder_state(&mut self, state: &crate::meeting_day::ReminderState) -> Result<()>;
+    fn prune_meeting_day(&mut self, now: &str) -> Result<()>;
     fn settings(&mut self) -> Result<Value>;
     fn save_settings(&mut self, settings: &Value) -> Result<()>;
 }

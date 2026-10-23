@@ -332,7 +332,7 @@ impl TranscriptSegment {
     }
 }
 pub fn default_settings() -> Value {
-    json!({"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"threads":2,"keepAudio":true,"customTemplates":[],"recipes":[
+    json!({"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"threads":2,"meetingReminders":false,"keepAudio":true,"customTemplates":[],"recipes":[
         {"id":"851ac7aa-aea5-4ed0-a750-838224c1850b","name":"Decisions and next steps","prompt":"What decisions were made and which next steps were agreed? Cite evidence. Include owners and dates only when stated; separate suggestions from commitments."},
         {"id":"35ad4a91-65dc-47b8-814d-efc48d709a5c","name":"Follow-up draft","prompt":"Draft a concise follow-up message I can review. Cover the main outcome, agreed actions and unresolved questions. Preserve uncertainty and attach evidence citations. Do not send it."},
         {"id":"9051642a-114c-48c6-aeb6-847b7be6549a","name":"Risks and open questions","prompt":"Identify stated risks, blockers, dependencies and unanswered questions. Cite evidence and clearly label any inference. Do not invent risks unsupported by this meeting."}
@@ -370,6 +370,7 @@ pub fn updated_settings(current: &Value, changes: &Value) -> Result<Value> {
         "autoSummary",
         "notionAutoSync",
         "keepAudio",
+        "meetingReminders",
     ] {
         if !result[name].is_boolean() {
             return Err(AppError::invalid(format!("{name} must be true or false.")));
@@ -443,6 +444,8 @@ pub fn text_list(value: &Value, label: &str, maximum: usize) -> Result<Vec<Strin
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEvent {
+    #[serde(default)]
+    pub all_day: bool,
     pub id: String,
     pub source: String,
     pub title: String,
@@ -452,7 +455,7 @@ pub struct CalendarEvent {
     pub attendees: Vec<String>,
 }
 impl CalendarEvent {
-    fn from_value(value: &Value) -> Result<Self> {
+    pub fn from_value(value: &Value) -> Result<Self> {
         let event: Self = serde_json::from_value(value.clone())
             .map_err(|_| AppError::invalid("Invalid calendar event."))?;
         for key in ["id", "source", "title"] {

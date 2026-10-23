@@ -62,6 +62,7 @@ fn portable_settings(settings: &Value) -> Result<Value> {
         ("webSearch", json!(false)),
         ("autoSummary", json!(false)),
         ("notionAutoSync", json!(false)),
+        ("meetingReminders", json!(false)),
         ("notionTarget", json!("")),
         ("notionPropertyMapping", json!({})),
         ("microphoneDeviceId", json!("")),

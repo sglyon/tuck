@@ -16,6 +16,8 @@ struct Data {
     revisions: HashMap<String, Vec<Value>>,
     corrections: HashMap<String, Vec<Value>>,
     settings: Option<Value>,
+    calendar_snapshots: HashMap<String, crate::meeting_day::CalendarSnapshot>,
+    reminder_states: HashMap<String, crate::meeting_day::ReminderState>,
 }
 #[derive(Default)]
 pub struct MemoryStore {
@@ -440,8 +442,90 @@ impl Repository for Data {
         }
         Ok(hits.into_iter().map(|(_, hit)| hit).collect())
     }
+    fn calendar_meeting(
+        &mut self,
+        event: &crate::domain::CalendarEvent,
+    ) -> Result<Option<Meeting>> {
+        let key = crate::meeting_day::occurrence_key(event)?;
+        let mut matches: Vec<_> = self
+            .meetings
+            .values()
+            .filter(|m| {
+                m.calendar_event
+                    .as_ref()
+                    .is_some_and(|e| crate::meeting_day::occurrence_key(e).is_ok_and(|k| k == key))
+            })
+            .cloned()
+            .collect();
+        matches.sort_by(|a, b| {
+            a.created_at
+                .cmp(&b.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(matches.into_iter().next())
+    }
+    fn calendar_meeting_id(
+        &mut self,
+        event: &crate::domain::CalendarEvent,
+    ) -> Result<Option<String>> {
+        let key = crate::meeting_day::occurrence_key(event)?;
+        Ok(self
+            .meetings
+            .values()
+            .filter(|m| {
+                m.calendar_event
+                    .as_ref()
+                    .is_some_and(|e| crate::meeting_day::occurrence_key(e).is_ok_and(|k| k == key))
+            })
+            .min_by(|a, b| {
+                a.created_at
+                    .cmp(&b.created_at)
+                    .then_with(|| a.id.cmp(&b.id))
+            })
+            .map(|m| m.id.clone()))
+    }
+    fn calendar_snapshots(&mut self) -> Result<Vec<crate::meeting_day::CalendarSnapshot>> {
+        let mut values: Vec<_> = self.calendar_snapshots.values().cloned().collect();
+        values.sort_by(|a, b| a.scope.cmp(&b.scope));
+        Ok(values)
+    }
+    fn save_calendar_snapshot(
+        &mut self,
+        snapshot: &crate::meeting_day::CalendarSnapshot,
+    ) -> Result<()> {
+        self.calendar_snapshots
+            .insert(snapshot.scope.clone(), snapshot.clone());
+        Ok(())
+    }
+    fn reminder_state(&mut self, key: &str) -> Result<Option<crate::meeting_day::ReminderState>> {
+        Ok(self.reminder_states.get(key).cloned())
+    }
+    fn save_reminder_state(&mut self, state: &crate::meeting_day::ReminderState) -> Result<()> {
+        self.reminder_states
+            .insert(state.occurrence_key.clone(), state.clone());
+        Ok(())
+    }
+    fn prune_meeting_day(&mut self, now: &str) -> Result<()> {
+        let now = crate::meeting_day::instant(now)?;
+        for snapshot in self.calendar_snapshots.values_mut() {
+            if !snapshot.live(now)? {
+                snapshot.events.clear();
+            }
+        }
+        self.reminder_states
+            .retain(|_, s| crate::meeting_day::instant(&s.expires_at).is_ok_and(|v| v > now));
+        Ok(())
+    }
     fn settings(&mut self) -> Result<Value> {
-        Ok(self.settings.clone().unwrap_or_else(default_settings))
+        let mut settings = default_settings();
+        if let Some(obj) = self.settings.as_ref().and_then(Value::as_object) {
+            for (k, v) in obj {
+                if settings.get(k).is_some() {
+                    settings[k] = v.clone();
+                }
+            }
+        }
+        Ok(settings)
     }
     fn save_settings(&mut self, s: &Value) -> Result<()> {
         self.settings = Some(s.clone());

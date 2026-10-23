@@ -8,6 +8,8 @@ use tuck_core::{
 };
 #[path = "core/library_loading.rs"]
 mod library_loading;
+#[path = "core/meeting_day.rs"]
+mod meeting_day;
 fn tx(store: &dyn Store, mut f: impl FnMut(&mut dyn Repository) -> Result<Value>) -> Result<Value> {
     store.transaction(&mut f)
 }
@@ -836,9 +838,9 @@ fn opens_python_schema_v1_without_rewriting_documents() {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            3
+            4
         );
-        db.pragma_update(None, "user_version", 4).unwrap();
+        db.pragma_update(None, "user_version", 5).unwrap();
     }
     assert!(SqliteStore::open(&path).is_err());
     std::fs::remove_dir_all(root).unwrap();
@@ -1048,7 +1050,7 @@ fn workspace_metadata_and_tasks_are_validated_atomically_and_survive_reload() {
     for store in stores() {
         let r = rig(store.clone());
         let id = create(&r);
-        let event = json!({"id":"ics:demo","source":"ics","title":"Planning","start":"2026-10-23T10:00:00-04:00","end":"2026-10-23T11:00:00-04:00","joinUrl":"https://example.com/join","attendees":["SGL"]});
+        let event = json!({"allDay":false,"id":"ics:demo","source":"ics","title":"Planning","start":"2026-10-23T10:00:00-04:00","end":"2026-10-23T11:00:00-04:00","joinUrl":"https://example.com/join","attendees":["SGL"]});
         call(
             &r.service,
             "update_meeting",
@@ -2124,7 +2126,7 @@ fn schema_v2_corrections_migrate_additively_and_raw_documents_stay_unchanged() {
     assert_eq!(
         db.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        3
+        4
     );
     drop(db);
     std::fs::remove_dir_all(dir).unwrap();

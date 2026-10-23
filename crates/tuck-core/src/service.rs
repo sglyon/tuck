@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+mod meeting_day;
 mod safety;
 mod workflow;
 
@@ -635,6 +636,14 @@ impl MeetingService {
                     json!({"meetings":meetings,"settings":settings,"status":self.get_status()?,"accounts":accounts}),
                 )
             }
+            "prepare_calendar_meeting" => self.prepare_calendar_meeting(&p["event"]),
+            "get_meeting_day" => self.get_meeting_day_at(&domain::now()),
+            "dismiss_meeting_reminder" => self.dismiss_meeting_reminder(domain::text(
+                &p["occurrenceKey"],
+                "Reminder",
+                16_384,
+                false,
+            )?),
             "create_meeting" => {
                 let mut m = Meeting::create(optional(p, "title", "Untitled meeting")?)?;
                 self.transaction(|r| {

@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS note_revisions (meeting_id TEXT NOT NULL REFERENCES m
 CREATE INDEX IF NOT EXISTS revisions_meeting ON note_revisions(meeting_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS revisions_target ON note_revisions(meeting_id,json_extract(document,'$.target'));
 CREATE TABLE IF NOT EXISTS transcript_corrections (meeting_id TEXT NOT NULL,segment_id TEXT NOT NULL,document TEXT NOT NULL,PRIMARY KEY(meeting_id,segment_id),FOREIGN KEY(meeting_id,segment_id) REFERENCES segments(meeting_id,id) ON DELETE CASCADE);
-PRAGMA user_version=3;
+CREATE INDEX IF NOT EXISTS meetings_calendar_occurrence ON meetings(json_extract(document,'$.calendarEvent.source'),json_extract(document,'$.calendarEvent.id'));
+CREATE TABLE IF NOT EXISTS calendar_snapshots (scope TEXT PRIMARY KEY CHECK(scope IN ('device','import')),expires_at TEXT NOT NULL,document TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS meeting_reminders (occurrence_key TEXT PRIMARY KEY,expires_at TEXT NOT NULL,document TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS meeting_reminders_expiry ON meeting_reminders(expires_at);
+PRAGMA user_version=4;
 "#;
 fn storage(_: rusqlite::Error) -> AppError {
     AppError::new("storage_error", "Tuck could not access its local library.")
@@ -69,7 +73,7 @@ impl SqliteStore {
         let version: i64 = db
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .map_err(storage)?;
-        if version > 3 {
+        if version > 4 {
             return Err(AppError::invalid(
                 "This library was created by a newer Tuck version. Update Tuck to open it.",
             ));
@@ -481,6 +485,97 @@ impl Repository for SqlRepository<'_> {
             hits.push(hit);
         }
         Ok(hits)
+    }
+    fn calendar_meeting(
+        &mut self,
+        event: &crate::domain::CalendarEvent,
+    ) -> Result<Option<Meeting>> {
+        let key = crate::meeting_day::occurrence_key(event)?;
+        let mut statement=self.db.prepare("SELECT document,version FROM meetings WHERE json_extract(document,'$.calendarEvent.source')=? AND json_extract(document,'$.calendarEvent.id')=? ORDER BY created_at,id").map_err(storage)?;
+        let rows = statement
+            .query_map(params![event.source, event.id], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+            })
+            .map_err(storage)?;
+        for row in rows {
+            let (doc, version) = row.map_err(storage)?;
+            let m = Self::restore(doc, version)?;
+            if m.calendar_event
+                .as_ref()
+                .is_some_and(|e| crate::meeting_day::occurrence_key(e).is_ok_and(|k| k == key))
+            {
+                return Ok(Some(m));
+            }
+        }
+        Ok(None)
+    }
+    fn calendar_meeting_id(
+        &mut self,
+        event: &crate::domain::CalendarEvent,
+    ) -> Result<Option<String>> {
+        let start = crate::meeting_day::instant(&event.start)?;
+        let mut statement=self.db.prepare("SELECT id,json_extract(document,'$.calendarEvent.start') FROM meetings WHERE json_extract(document,'$.calendarEvent.source')=? AND json_extract(document,'$.calendarEvent.id')=? ORDER BY created_at,id").map_err(storage)?;
+        let rows = statement
+            .query_map(params![event.source, event.id], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(storage)?;
+        for row in rows {
+            let (id, saved_start) = row.map_err(storage)?;
+            if crate::meeting_day::instant(&saved_start).is_ok_and(|v| v == start) {
+                return Ok(Some(id));
+            }
+        }
+        Ok(None)
+    }
+    fn calendar_snapshots(&mut self) -> Result<Vec<crate::meeting_day::CalendarSnapshot>> {
+        let mut s = self
+            .db
+            .prepare("SELECT document FROM calendar_snapshots ORDER BY scope")
+            .map_err(storage)?;
+        let rows = s
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(storage)?;
+        rows.map(|r| decode(&r.map_err(storage)?)).collect()
+    }
+    fn save_calendar_snapshot(
+        &mut self,
+        snapshot: &crate::meeting_day::CalendarSnapshot,
+    ) -> Result<()> {
+        self.db.execute("INSERT INTO calendar_snapshots VALUES(?,?,?) ON CONFLICT(scope) DO UPDATE SET expires_at=excluded.expires_at,document=excluded.document",params![snapshot.scope,crate::meeting_day::normalized(&snapshot.expires_at)?,json!(snapshot).to_string()]).map_err(storage)?;
+        Ok(())
+    }
+    fn reminder_state(&mut self, key: &str) -> Result<Option<crate::meeting_day::ReminderState>> {
+        self.db
+            .query_row(
+                "SELECT document FROM meeting_reminders WHERE occurrence_key=?",
+                [key],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(storage)?
+            .map(|s| decode(&s))
+            .transpose()
+    }
+    fn save_reminder_state(&mut self, state: &crate::meeting_day::ReminderState) -> Result<()> {
+        self.db.execute("INSERT INTO meeting_reminders VALUES(?,?,?) ON CONFLICT(occurrence_key) DO UPDATE SET expires_at=excluded.expires_at,document=excluded.document",params![state.occurrence_key,crate::meeting_day::normalized(&state.expires_at)?,json!(state).to_string()]).map_err(storage)?;
+        Ok(())
+    }
+    fn prune_meeting_day(&mut self, now: &str) -> Result<()> {
+        let now = crate::meeting_day::normalized(now)?;
+        for mut snapshot in self.calendar_snapshots()? {
+            if !snapshot.live(crate::meeting_day::instant(&now)?)? && !snapshot.events.is_empty() {
+                snapshot.events.clear();
+                self.save_calendar_snapshot(&snapshot)?;
+            }
+        }
+        self.db
+            .execute(
+                "DELETE FROM meeting_reminders WHERE julianday(expires_at)<=julianday(?)",
+                [&now],
+            )
+            .map_err(storage)?;
+        Ok(())
     }
     fn settings(&mut self) -> Result<Value> {
         let row: Option<String> = self

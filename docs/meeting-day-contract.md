@@ -1,0 +1,39 @@
+# Meeting-day preparation and reminders
+
+Meeting preparation is a supporting capability within the existing Meeting Workspace bounded context. Calendar providers are upstream systems translated by the native adapter; their event is a snapshot, never the authority for user notes. The existing Store and Repository ports retain the explicit transaction boundary and SQLite/in-memory implementations. The application service coordinates lookup, Meeting creation, persistence and DTO projection. It does not add a scheduler framework, event bus, extra bounded context or cloud synchronization.
+
+The proportionate DDD route for this slice is `ddd-selecting-patterns` → `ddd-hexagonal-architecture` → `ddd-value-object` → `ddd-repository` → `ddd-application-services`. Persistence portability is the concrete justification for ports; independent core tests are the second benefit. An occurrence is the value `(source, event ID, UTC instant of start)`, including subsecond precision. Offset spelling and daylight-saving offsets do not change identity when they denote the same instant. Another occurrence of a recurring event or another source is distinct.
+
+## Public commands
+
+- `prepare_calendar_meeting {event: CalendarEvent}` returns a full Meeting DTO. Lookup and creation happen in one Store transaction. Repeated calls and concurrent callers return the existing workspace, including its original calendar snapshot, title, notes and lifecycle. A newly prepared workspace is a draft with the event title, attendees as people and its attached calendar snapshot. Preparation never starts capture, inference, joining or publication. Existing workspaces attached through the previous edit workflow are found too. Deleting a workspace permits explicit preparation to create another later.
+- `get_meeting_day {}` returns `{events, snapshots, reminders, enabled, suppressed}`. Events and reminders use `{occurrenceKey, event, meetingId}`; meetingId is null until prepared. CalendarEvent retains id/source/title/start/end/joinUrl/attendees and adds `allDay`, default false for older data. Snapshots contain `{scope, refreshedAt, expiresAt}`. This command performs no provider, account or credential-store I/O.
+- `dismiss_meeting_reminder {occurrenceKey}` returns null. Dismissal is durable for the occurrence, across refreshes, preference toggles and process restart. It hides the in-app reminder and prevents a later native delivery claim. An already attempted OS notification cannot be recalled by the core.
+- Existing `update_settings` accepts boolean `meetingReminders`, default false, and rejects other value types. Native permission consent must be requested only from the explicit opt-in interaction. Reading the setting does not request OS permission.
+
+occurrenceKey is the JSON string encoding of `[source,id,normalized UTC start]`; callers treat it as opaque. Its length is bounded by validated event fields. Full Meeting DTOs are loaded only for preparation/selection. Calendar list linking queries only meeting ID and attached event start, with an index on calendar source/ID; polling does not hydrate meeting notes or transcripts.
+
+## Host-only methods
+
+The native clock is passed as an RFC3339 string for deterministic tests; public callers cannot supply time.
+
+- `replace_calendar_snapshot(scope: &str, events: &[Value], now: &str) -> Result<Value>` validates and atomically replaces one scope, then returns the meeting-day DTO. Scope is `device` or `import`. Invalid input rolls back without deleting the previous snapshot.
+- `invalidate_calendar_snapshot(scope: &str) -> Result<()>` revokes a failed/revoked device connection's reminder freshness while retaining its visible cached events. Import invalidation expires its snapshot.
+- `get_meeting_day_at(now: &str) -> Result<Value>` returns the same DTO as the public read.
+- `meeting_reminders_enabled() -> Result<bool>` and `set_meeting_reminders_enabled(bool) -> Result<()>` access the preference without probing credentials.
+- `meeting_day_suppressed() -> Result<bool>` is a cheap active-lifecycle guard. The claim itself serializes with recording lifecycle changes and immediately skips a busy lifecycle; it never queues an old host timestamp behind long capture work.
+- `claim_meeting_reminders_at(now: &str) -> Result<Value>` atomically returns the array of newly claimed reminder DTOs. The native host attempts its OS notification after this durable commit, outside the transaction.
+
+## Bounded snapshots and reminder policy
+
+Each refresh accepts at most 1,000 input events, validates/filters them and retains the earliest 256 per scope. Each scope retains only positive-duration timed events ending after refresh time and starting between one minute before refresh and seven days after refresh, and replaces independently of the other scope. All-day events are excluded. Upcoming events may be solo appointments so the person can explicitly prepare notes. Device snapshots remain visible for 24 hours; imported ICS snapshots remain visible for seven days. Reads also hide ended events and expired snapshots. Imported data is a local snapshot, not live provider sync.
+
+A reminder additionally requires at least one attendee or a meeting link. This is a deliberately narrow cue for a conversation, with no inferred identity or automatic joining. Reminder eligibility begins five minutes before the event and ends one minute after its start, inclusive. On sleep/restart, older occurrences cannot deliver stale reminders. Device reminders additionally require a successful snapshot refresh within five minutes; a failed/revoked refresh invalidates that freshness immediately. Imported reminders use their explicit snapshot lifetime.
+
+The preference must be on and no recording/paused/processing capture may be active. The native worker uses the same core claim policy as the in-app read. Claiming marks the occurrence delivered before attempting OS delivery, giving at-most-once attempts; a crash or OS failure can omit a notification but cannot generate a repeated nag. The in-app reminder remains available until dismissed or its one-minute grace ends. Delivery/dismissal state expires eight days after the occurrence start; expired ledger rows and snapshot event bodies are pruned during meeting-day operations. The two bounded snapshot metadata records remain available to explain expiry and prompt refresh. A notification is a reminder only: it has no authority to record, infer, join or publish.
+
+## Persistence and privacy
+
+SQLite schema v4 adds two small tables for calendar snapshots and occurrence reminder state plus a calendar occurrence index. Existing meeting/evidence documents and notes are not rewritten by migration. Store transactions serialize preparation across callers and independent SQLite connections. A future hosted adapter must preserve transaction isolation, occurrence equality, snapshot replacement, metadata-only linking and durable claim/dismissal behavior through the same ports.
+
+Cached upcoming events and the reminder ledger are device-local operational data. They never enter settings DTOs or portable backup manifests. An event attached by explicit preparation is part of that meeting and retains the established meeting backup semantics. Exported portable preferences set meetingReminders false, and restore sanitizes it to false for a new library; restoring into an existing library retains that library's existing preference rather than enabling it from a backup. No cached event or delivery record is reconstructed from backup settings.
