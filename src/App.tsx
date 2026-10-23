@@ -58,7 +58,10 @@ import LibraryDesk, {
   type LibraryScope,
 } from "./components/LibraryDesk";
 import { Organization, Tasks, WritingTools } from "./components/MeetingTools";
-import UpcomingMeetings from "./components/UpcomingMeetings";
+import UpcomingMeetings, {
+  MeetingReminder,
+} from "./components/UpcomingMeetings";
+import { useMeetingDay, type CalendarOccurrence } from "./lib/useMeetingDay";
 import { NotionRecovery } from "./components/NotionDestination";
 import { Markdown } from "./components/Markdown";
 import {
@@ -232,6 +235,7 @@ function ConfirmDialog({
 export default function App() {
   const [meetings, commitMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<SettingsData>(defaults);
+  const meetingDay = useMeetingDay();
   const [status, setStatus] = useState<EngineStatus>(emptyStatus);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -945,6 +949,16 @@ export default function App() {
     const result = await call<SettingsData>("update_settings", { changes });
     setSettings({ ...defaults, ...result });
   };
+  const prepareCalendarMeeting = async (occurrence: CalendarOccurrence) => {
+    if (!(await flushEdits()))
+      throw new Error("Save your pending edits before opening meeting notes.");
+    const prepared = await call<Meeting>("prepare_calendar_meeting", {
+      event: occurrence.event,
+    });
+    merge(prepared);
+    choose(prepared.id);
+    setTab("notes");
+  };
   const start = () => {
     if (!meeting) return;
     void run("record", async () => {
@@ -1378,7 +1392,25 @@ export default function App() {
           />
         </div>
         <div className="meeting-list">
-          <UpcomingMeetings merge={merge} choose={choose} notify={notify} />
+          {library.error && (
+            <div className="library-load-state" role="alert">
+              <p>{library.error}</p>
+              <button className="text-link" onClick={() => void library.load()}>
+                Try again
+              </button>
+            </div>
+          )}
+          <UpcomingMeetings
+            controller={meetingDay}
+            onPrepare={prepareCalendarMeeting}
+            onRemindersChanged={(enabled) =>
+              setSettings((previous) => ({
+                ...previous,
+                meetingReminders: enabled,
+              }))
+            }
+            notify={notify}
+          />
 
           {groups.map((group) => (
             <section key={group}>
@@ -1429,14 +1461,6 @@ export default function App() {
             <p className="library-load-state" role="status">
               {library.notice}
             </p>
-          )}
-          {library.error && (
-            <div className="library-load-state" role="alert">
-              <p>{library.error}</p>
-              <button className="text-link" onClick={() => void library.load()}>
-                Try again
-              </button>
-            </div>
           )}
           {library.cursor && !library.loading && (
             <button
@@ -1552,6 +1576,12 @@ export default function App() {
             )}
           </div>
         </div>
+        <MeetingReminder
+          controller={meetingDay}
+          onPrepare={prepareCalendarMeeting}
+          notify={notify}
+          active={!!capture || !!status.activeMeetingId}
+        />
         {view === "settings" ? (
           <div className="document-scroll settings-scroll">
             <Settings

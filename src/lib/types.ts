@@ -44,6 +44,7 @@ export interface CalendarEvent {
   end: string;
   joinUrl: string;
   attendees: string[];
+  allDay?: boolean;
 }
 export interface Template {
   id: string;
@@ -129,6 +130,7 @@ export interface Settings {
   recipes: Recipe[];
   microphoneDeviceId: string;
   systemDeviceId: string;
+  meetingReminders: boolean;
 }
 export interface EngineStatus {
   engineVersion: string;

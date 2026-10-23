@@ -30,6 +30,7 @@ export const defaults: Settings = {
   recipes: [],
   microphoneDeviceId: "",
   systemDeviceId: "",
+  meetingReminders: false,
 };
 const previewStatus: EngineStatus = {
   engineVersion: "preview",

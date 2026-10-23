@@ -4352,3 +4352,140 @@ mark {
     min-height: 140px;
   }
 }
+
+/* Meeting-day continuity stays within the library/document seams. */
+.upcoming-meetings > h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.upcoming-meetings > .upcoming-event {
+  border-top: 0;
+  padding: 0 0 12px;
+}
+.upcoming-event > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.upcoming-event > span {
+  margin: 3px 0 9px;
+  font-variant-numeric: tabular-nums;
+}
+.upcoming-event .button {
+  min-height: 34px;
+  font-size: 12px;
+}
+.calendar-options > summary,
+.later-meetings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 550;
+}
+.calendar-options > summary::-webkit-details-marker,
+.later-meetings > summary::-webkit-details-marker {
+  display: none;
+}
+.calendar-options[open] > summary svg,
+.later-meetings[open] > summary svg {
+  transform: rotate(90deg);
+}
+.calendar-options > p,
+.meeting-reminder-setting > p {
+  margin: 7px 0 10px;
+}
+.meeting-reminder-setting {
+  border-top: 1px solid #dfe4ed;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.meeting-reminder-setting label {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
+  cursor: pointer;
+}
+.meeting-reminder-setting input {
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+.calendar-working {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.calendar-error {
+  color: var(--ink);
+}
+.meeting-reminder {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 15px 25px;
+  background: #edf0fb;
+  border-bottom: 1px solid #dce2f3;
+  color: #354a9a;
+}
+.meeting-reminder > svg {
+  flex-shrink: 0;
+}
+.meeting-reminder > div:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.meeting-reminder h2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.meeting-reminder p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #4e5d87;
+}
+.meeting-reminder-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 1190px) {
+  .meeting-reminder {
+    flex-wrap: wrap;
+    padding: 14px 20px;
+  }
+  .meeting-reminder-actions {
+    width: 100%;
+    margin-left: 30px;
+  }
+}
+@media (max-width: 700px) {
+  .meeting-reminder {
+    padding: 14px 22px;
+  }
+  .meeting-reminder-actions .button {
+    min-height: 38px;
+  }
+  .calendar-options > summary,
+  .later-meetings > summary {
+    min-height: 40px;
+  }
+  .upcoming-event .button {
+    min-height: 38px;
+  }
+}
