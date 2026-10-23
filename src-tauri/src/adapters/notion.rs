@@ -13,6 +13,8 @@ const API_VERSION: &str = "2026-03-11";
 const MANAGED_TITLE: &str = "Meeting notes · Tuck";
 const MAX_RESPONSE: u64 = 2_000_000;
 
+mod template;
+
 pub struct NotionPublisher {
     secrets: Arc<dyn SecretPort>,
     client: Client,
@@ -536,7 +538,7 @@ fn read_json(response: reqwest::blocking::Response) -> Result<Value> {
 fn creation_status(status: u16) -> Result<()> {
     match status {
         200..=299 => Ok(()),
-        401 | 403 | 404 | 429 | 529 => Err(read_status(status)),
+        401 | 403 | 404 | 429 => Err(read_status(status)),
         400..=499 if status != 408 => Err(error("Notion rejected these notes. Check destination access and property requirements; your notes are saved locally.")),
         _ => Err(uncertain("Notion may have received these notes. Check the destination before publishing a new page; an existing page can be safely reconciled.")),
     }
@@ -559,6 +561,12 @@ impl PublicationPort for NotionPublisher {
         settings: &Value,
     ) -> Result<String> {
         self.publish_snapshot(target, meeting, settings)
+    }
+    fn parents(&self, query: &str) -> Result<Value> {
+        self.template_parents(query)
+    }
+    fn provision(&self, parent: &str, allow_create: bool) -> Result<Value> {
+        self.template_provision(parent, allow_create)
     }
     fn destinations(&self, query: &str) -> Result<Value> {
         if query.chars().count() > 200 {
@@ -732,13 +740,13 @@ mod tests {
     }
     #[test]
     fn ambiguous_write_outcomes_are_preserved() {
-        for status in [302, 408, 500, 502, 503, 504] {
+        for status in [302, 408, 500, 502, 503, 504, 529] {
             assert_eq!(
                 creation_status(status).unwrap_err().code,
                 "publish_uncertain"
             );
         }
-        for status in [400, 401, 403, 404, 409, 429, 529] {
+        for status in [400, 401, 403, 404, 409, 429] {
             assert_eq!(creation_status(status).unwrap_err().code, "publish_error");
         }
         assert!(creation_status(200).is_ok());
@@ -766,8 +774,10 @@ mod tests {
             unreachable!()
         }
     }
-    type Step = (&'static str, String, u16, Value);
-    fn script(steps: Vec<Step>) -> (NotionPublisher, std::thread::JoinHandle<Vec<Value>>) {
+    pub(super) type Step = (&'static str, String, u16, Value);
+    pub(super) fn script(
+        steps: Vec<Step>,
+    ) -> (NotionPublisher, std::thread::JoinHandle<Vec<Value>>) {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let address = server.server_addr().to_ip().unwrap();
         let worker = std::thread::spawn(move || {

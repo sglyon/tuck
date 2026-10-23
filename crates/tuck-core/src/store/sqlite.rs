@@ -588,7 +588,7 @@ impl Repository for SqlRepository<'_> {
             let value: Value = decode(&row)?;
             if let Some(obj) = value.as_object() {
                 for (k, v) in obj {
-                    if settings.get(k).is_some() {
+                    if settings.get(k).is_some() || k == "_notionSetup" {
                         settings[k] = v.clone();
                     }
                 }

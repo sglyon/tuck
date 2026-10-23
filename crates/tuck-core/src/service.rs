@@ -10,6 +10,7 @@ use std::{
 };
 
 mod meeting_day;
+mod notion_setup;
 mod safety;
 mod workflow;
 
@@ -177,6 +178,13 @@ impl MeetingService {
     }
     pub fn get_settings(&self) -> Result<Value> {
         let mut v = self.transaction(|r| r.settings())?;
+        let journal = v.as_object_mut().and_then(|o| o.remove("_notionSetup"));
+        v["notionSetup"] = journal.filter(Value::is_object).map_or(Value::Null, |j| {
+            json!({
+                "parent":j["parent"], "status":j["status"],
+                "destination":j["destination"], "message":j["message"]
+            })
+        });
         v["hasOpenAIKey"] = json!(self.credential_flag("openai"));
         v["hasNotionToken"] = json!(self.credential_flag("notion"));
         Ok(v)
@@ -872,6 +880,11 @@ impl MeetingService {
                 None => "",
                 Some(value) => domain::text(value, "Search", 240, true)?,
             }),
+            "notion_parent_pages" => self.adapters.publisher.parents(match p.get("query") {
+                None => "",
+                Some(value) => domain::text(value, "Search", 240, true)?,
+            }),
+            "notion_create_database" => self.create_notion_database(string(p, "parent")?),
             "notion_destination" => {
                 let settings = self.get_settings()?;
                 let target = domain::text(

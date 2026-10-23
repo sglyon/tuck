@@ -451,6 +451,15 @@ pub fn updated_settings(current: &Value, changes: &Value) -> Result<Value> {
             "Local AI must use an HTTP loopback address on this device.",
         ));
     }
+    // Device-local creation journal is not a user-editable preference or portable data.
+    if let Some(journal) = current.get("_notionSetup") {
+        result["_notionSetup"] = journal.clone();
+        if (change.contains_key("notionTarget") || change.contains_key("notionPropertyMapping"))
+            && result["_notionSetup"].is_object()
+        {
+            result["_notionSetup"]["attempt"] = json!(Uuid::new_v4().to_string());
+        }
+    }
     Ok(result)
 }
 

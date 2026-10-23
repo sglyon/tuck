@@ -520,7 +520,7 @@ impl Repository for Data {
         let mut settings = default_settings();
         if let Some(obj) = self.settings.as_ref().and_then(Value::as_object) {
             for (k, v) in obj {
-                if settings.get(k).is_some() {
+                if settings.get(k).is_some() || k == "_notionSetup" {
                     settings[k] = v.clone();
                 }
             }

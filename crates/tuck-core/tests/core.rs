@@ -12,6 +12,8 @@ mod dictation;
 mod library_loading;
 #[path = "core/meeting_day.rs"]
 mod meeting_day;
+#[path = "core/notion_setup.rs"]
+mod notion_setup;
 #[path = "core/publication_preferences.rs"]
 mod publication_preferences;
 fn tx(store: &dyn Store, mut f: impl FnMut(&mut dyn Repository) -> Result<Value>) -> Result<Value> {
@@ -216,8 +218,29 @@ struct Publisher {
     settings: Mutex<Vec<Value>>,
     published: Mutex<Vec<Value>>,
     recoveries: Mutex<Vec<(String, Value, String)>>,
+    provisioned: Mutex<Vec<(String, bool)>>,
+    provision_outcomes: Mutex<Vec<Result<Value>>>,
+    provision_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 impl PublicationPort for Publisher {
+    fn provision(&self, parent: &str, allow_create: bool) -> Result<Value> {
+        self.provisioned
+            .lock()
+            .unwrap()
+            .push((parent.into(), allow_create));
+        if let Some(hook) = self.provision_hook.lock().unwrap().as_ref() {
+            hook();
+        }
+        let mut outcomes = self.provision_outcomes.lock().unwrap();
+        if !outcomes.is_empty() {
+            return outcomes.remove(0);
+        }
+        Ok(json!({
+            "id":"00000000-0000-4000-8000-000000000002",
+            "title":"Meeting notes", "url":"https://www.notion.so/00000000000040008000000000000002",
+            "mapping":{"date":"Date","folder":"Folder","tags":"Tags","people":"People","meetingId":"Tuck meeting ID"}
+        }))
+    }
     fn recover(&self, target: &str, meeting: &Value, address: &str) -> Result<String> {
         self.recoveries
             .lock()

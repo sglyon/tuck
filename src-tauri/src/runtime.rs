@@ -25,14 +25,7 @@ pub struct DesktopRuntime {
 }
 impl DesktopRuntime {
     fn reset_notion_destination(&self) -> Result<()> {
-        self.service
-            .handle(
-                "update_settings",
-                serde_json::json!({"changes":{
-                    "notionTarget":"", "notionPropertyMapping":{}, "notionAutoSync":false
-                }}),
-            )
-            .map(|_| ())
+        self.service.reset_notion_destination()
     }
     /// Only the Tauri host calls this; the diagnostic host remains inert.
     pub fn start_reminders(

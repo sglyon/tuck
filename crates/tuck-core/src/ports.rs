@@ -48,6 +48,18 @@ pub trait IntelligencePort: Send + Sync {
     ) -> Result<String>;
 }
 pub trait PublicationPort: Send + Sync {
+    fn parents(&self, _query: &str) -> Result<Value> {
+        Err(AppError::unavailable(
+            "This publisher cannot find shared parent pages.",
+        ))
+    }
+    /// With allow_create=false this must only reconcile an existing template.
+    /// An ambiguous creation returns notion_setup_uncertain; it must never be retried blindly.
+    fn provision(&self, _parent: &str, _allow_create: bool) -> Result<Value> {
+        Err(AppError::unavailable(
+            "This publisher cannot create a meeting database.",
+        ))
+    }
     /// Read-only verification of a page copied by the user after an uncertain
     /// initial publication. Implementations must check destination and ownership.
     fn recover(&self, _target: &str, _meeting: &Value, _url: &str) -> Result<String> {
