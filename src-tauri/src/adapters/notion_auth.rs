@@ -22,6 +22,7 @@ use url::Url;
 use uuid::Uuid;
 
 const KIND: &str = "tuck-notion-oauth-v1";
+const DEFAULT_BROKER: &str = "https://tuck-notion-auth.sglyon.workers.dev";
 const MAX_RESPONSE: u64 = 65_536;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -303,7 +304,11 @@ impl NotionAuth {
         let configured = option_env!("TUCK_NOTION_AUTH_BROKER_URL").map(str::to_owned);
         #[cfg(feature = "diagnostics")]
         let configured = configured.or_else(|| std::env::var("TUCK_NOTION_AUTH_BROKER_URL").ok());
-        let mut auth = Self::with_broker(secrets, configured.as_deref())?;
+        let configured = configured.unwrap_or_else(|| DEFAULT_BROKER.to_owned());
+        let mut auth = Self::with_broker(
+            secrets,
+            (!configured.is_empty()).then_some(configured.as_str()),
+        )?;
         auth.lease = Some(CredentialLease::system()?);
         Ok(auth)
     }
