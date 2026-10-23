@@ -1,0 +1,55 @@
+{
+  "verifiedAt": "2026-10-23T18:41:48.577937+00:00",
+  "applicationSourceCommit": "6670be71df0e976c5b60579f0bacfdcd3f2172c8",
+  "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
+  "bundleBytes": 61984983,
+  "mainExecutableSha256": "1889762c239e3f716a99d322bbdf996ae56b5272b73536bd4dc0358214ab5963",
+  "pythonFiles": [],
+  "bundledModelOrQualificationFiles": [],
+  "licensePresent": true,
+  "coreUnitTestsPassed": 3,
+  "coreIntegrationTestsPassed": 72,
+  "nativeLibraryTestsPassed": 108,
+  "nativeLibraryTestsIgnored": 2,
+  "desktopLifecycleTestsPassed": 2,
+  "uiUnitTestsPassed": 7,
+  "uiE2ETestsPassed": 64,
+  "uiVisualOnlyTestsSkipped": 5,
+  "brokerAndWorkerTestsPassed": 17,
+  "impeccableScores": {
+    "notionTemplateA": 31,
+    "notionTemplateB": 32,
+    "connectionAndDictationA": 32,
+    "connectionAndDictationB": 33
+  },
+  "dictationIntegrationEvidence": "dictation.json",
+  "notionWorkerEvidence": "notion-worker.json",
+  "notionNativeAcceptanceEvidence": "notion-template.json",
+  "previousNativeAcceptanceEvidence": "meeting-day-package.json",
+  "nativeAcceptanceChecks": [
+    "exact final package relaunched with Dictate a note and guided Notion setup",
+    "saved OAuth connection and template destination survived native quit/relaunch",
+    "dedicated Finish database setup completed the existing view without creating another database",
+    "settled Notion browser showed Recent meetings and the intended five visible columns",
+    "labeled public verification recap, notes and completed action published into the chosen database",
+    "Update notes changed the same Notion page and preserved a single database row",
+    "ready status and selected content survived restart; automatic publishing stayed off"
+  ],
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "chatgptAccountAccess": false,
+  "notionAccountAccess": true,
+  "externalProviderAccess": true,
+  "minimum16GBRealCallQualified": false,
+  "distribution": "Unsigned development app",
+  "buildAdvisories": [
+    "Main JavaScript chunk544.99kB (165.45kB gzip), above Vite500kB advisory."
+  ],
+  "nativeAcceptanceLimits": [
+    "initial database creation used the preceding build; final build completed and verified that same database layout",
+    "no live microphone dictation or system-audio hardware capture",
+    "no live refresh/revocation/workspace-switching test against the working account",
+    "no16GB real-call, energy, sleep/wake or Windows/Linux hardware qualification",
+    "prior playback verification is historical and was not repeated on this exact bundle"
+  ]
+}

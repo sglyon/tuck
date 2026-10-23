@@ -1,0 +1,52 @@
+{
+  "verifiedAt": "2026-10-23T19:36:48.361528+00:00",
+  "applicationSourceCommit": "ab02f9e912cf69e590f6dfcaa4841fa6e202da52",
+  "kind": "Synthetic native integration; not real model judgment or hardware performance",
+  "test": "coaching::acceptance::native_local_coach_batches_grounded_agents_privately_and_persists_reviewed_follow_up",
+  "composition": [
+    "real native Intelligence adapter",
+    "real MeetingService",
+    "temporary on-disk SQLite and reopen",
+    "temporary LocalArchive",
+    "synthetic capture port",
+    "tiny_http loopback local-provider fixture"
+  ],
+  "providerRequests": 1,
+  "agentsBatched": 2,
+  "checks": [
+    "off means no HTTP",
+    "30-second first-check gate via deterministic clock seam",
+    "two eligible profiles share one request",
+    "actual payload excludes handwritten notes, title, people, manual chat and stale evidence",
+    "local transport has no Authorization or tools",
+    "two CPU threads and 1200 output-token budget",
+    "suggestions require matching actual evidence IDs and quotes",
+    "tasks created only after explicit Save; repeated Save is idempotent",
+    "owners/dates remain unset",
+    "suggestions and saved task survive SQLite reopen; monitoring remains off",
+    "stop and restart do not trigger another provider request"
+  ],
+  "resourceLimits": {
+    "inputUtf8Bytes": 12000,
+    "recentSegments": 64,
+    "recentSeconds": 300,
+    "openSuggestions": 3,
+    "retainedHistory": 24,
+    "profilesPerCall": 3,
+    "minimumRequestStartIntervalSeconds": 30,
+    "quietCardIntervalSeconds": 90,
+    "activeCardIntervalSeconds": 30,
+    "httpTimeoutSeconds": 20,
+    "rawResponseBytes": 65536,
+    "answerCharacters": 3000,
+    "localContextTokens": 16384,
+    "localThreads": 2,
+    "maxOutputTokens": 1200
+  },
+  "limits": [
+    "Transport checks use a fake provider and synthetic speech.",
+    "No actual local-model output quality, live hardware, 16GB or long-call performance claim.",
+    "HTTP deadline excludes OS credential approval/unlock and ChatGPT authentication refresh.",
+    "Native lifecycle startup/quit no longer decrypts credentials; explicit provider operations still use protected credentials."
+  ]
+}

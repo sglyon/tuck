@@ -29,6 +29,7 @@ The app is a single-user desktop process. The trusted Rust host is the inbound s
 - **My notes**: user-authored text. Generating a summary never replaces it.
 - **Summary**: an editable recap, optionally generated from a transcript snapshot with timestamp citations. It is interpretation, separate from speech evidence and personal notes.
 - **Bookmark**: a user's marker at an audio timestamp.
+- **Meeting agent**: an editable named transcript monitor, selected and explicitly enabled for one call. Its grounded suggestions belong to that meeting; saving a follow-up is a separate user action.
 - **Publication**: a snapshot of notes/recap/actions sent to the chosen Notion destination. Known pages support explicit updates; an uncertain creation outcome requires verified recovery instead of a blind retry.
 - **Recording**: draft → recording ↔ paused → processing → complete. Startup changes abandoned active states to interrupted. A pristine failed start returns to draft; partial evidence stays recoverable.
 
@@ -59,6 +60,8 @@ No database transaction is held during capture shutdown, inference, OAuth, or pu
 Portable backups take a consistent metadata/evidence snapshot, then stream owned audio through the archive adapter outside the database transaction. Restore validates the full manifest and stages audio before committing new meeting IDs; existing IDs are skipped as a unit. Audio installation follows that commit and reports partial failures truthfully. Shutdown waits on the same lifecycle guard as backup/restore. These rules do not pretend a filesystem and database share one atomic transaction.
 
 Desktop startup returns a bounded page of meeting headers and global scalar counts/capped facets. It loads a complete meeting only when selected, with a bounded cache in the interface. Core-owned read operations project headers and page by stable keys directly in SQLite; a transactional generation invalidates stale page chains. No separate read service or write model is introduced. Calendar preparation atomically reuses a workspace by occurrence identity. A host-owned low-frequency reminder worker uses the core eligibility policy and durable delivery claims; the cached calendar read never calls providers or credential stores. Calendar cache and reminder state stay out of portable backups. See [meeting-day contract](meeting-day-contract.md). Full bootstrap remains a diagnostic compatibility command. A single selected meeting still loads its complete transcript. See [loading contract](library-loading-contract.md) and [verification](library-loading-verification.md).
+
+A second host-owned worker periodically offers live-agent snapshots to the same service and IntelligencePort. Core policy bounds effective recent evidence, cadence, selection and durable suggestion history. The native adapter serializes model requests with manual priority and caps automatic context/output/transport. Enabled state is transient; neither restart nor backup restore starts an agent. This adds no model instance, event bus or separate hosted agent service. See [agent contract](live-coach-contract.md) and [native limits](live-coach-native.md).
 
 ## Replacing SQLite later
 
