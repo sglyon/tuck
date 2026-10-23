@@ -4519,3 +4519,47 @@ mark {
 .dictation-original { margin:0 0 20px; padding:12px 0; border-bottom:1px solid var(--line); }
 .dictation-original summary { color:var(--muted); font-size:13px; cursor:pointer; }
 .dictation-original-text { max-width:75ch; white-space:pre-wrap; font-size:14px; line-height:1.85; margin:12px 0; }
+
+/* Guided Notion database setup inherits the flat settings surface. */
+.notion-template-intro > p {
+  color: #536179;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 13px;
+}
+.notion-template-setup h4 {
+  margin: 0 0 5px;
+  color: #292e3a;
+  font-size: 14px;
+  font-weight: 600;
+}
+.notion-template-setup > .inline-input { margin-top: 13px; }
+.notion-parent-results {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.notion-parent-results > button { min-height: 42px; }
+.destination-results > button > span { overflow-wrap: anywhere; min-width: 0; }
+.destination-results > button > svg { flex-shrink: 0; }
+.notion-template-preview {
+  margin: 18px 0 16px;
+  padding: 14px 0;
+  border-top: 1px solid #e7eaf0;
+  border-bottom: 1px solid #e7eaf0;
+  color: #536179;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.notion-template-preview strong { color: #292e3a; font-weight: 600; }
+.notion-template-preview p { margin: 5px 0 0; }
+.notion-template-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.notion-template-actions > button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.notion-template-setup > .quiet-note:last-child { margin-top: 10px; }
+.notion-existing { margin-top: 18px; color: #536179; font-size: 13px; }
+.notion-existing > summary { cursor: pointer; line-height: 1.7; }
+.notion-existing > .inline-input { margin-top: 12px; }
+.notion-template-ready { display: flex; align-items: flex-start; gap: 9px; color: #536179; font-size: 13px; line-height: 1.7; }
+.notion-template-ready > svg { color: #348064; flex-shrink: 0; margin-top: 3px; }
+.notion-template-ready strong { color: #292e3a; font-weight: 600; }
+.notion-template-ready p { margin: 3px 0 7px; }
+.notion-template-ready + .notion-template-intro { margin-top: 18px; }

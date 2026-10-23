@@ -124,6 +124,12 @@ export interface Settings {
   notionContent: { recap: boolean; notes: boolean; tasks: boolean };
   notionTarget: string;
   notionPropertyMapping: Record<string, string>;
+  notionSetup?: {
+    parent: string;
+    status: "creating" | "uncertain" | "ready";
+    destination?: { id: string; title: string; url: string };
+    message?: string;
+  } | null;
   threads: number;
   keepAudio: boolean;
   hasOpenAIKey: boolean;
