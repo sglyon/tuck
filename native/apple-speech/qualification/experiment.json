@@ -1,0 +1,96 @@
+{
+  "dataset": "argmaxinc/contextual-earnings22",
+  "datasetRevision": "59d7f94771cc197984d8038e494c83abeff87282",
+  "selection": "first six test rows, unfiltered, fixed before inference",
+  "terms": [
+    "Anna",
+    "Pryanova",
+    "Gazprom",
+    "HepsiPay",
+    "Ericsson",
+    "Arqit",
+    "Urbanimmersive",
+    "Andi",
+    "Setiawan",
+    "NVIDIA",
+    "Anthropic",
+    "Yandex Pay"
+  ],
+  "fixtures": [
+    {
+      "id": "4469291_chunk82",
+      "pcm": "4469291_chunk82.f32",
+      "expected": [
+        "Anna",
+        "Pryanova",
+        "Gazprom"
+      ],
+      "reference": "you very much. Once again, we have a question from the Russian line from Ms. Anna Pryanova from Gazprom Bank. Please go ahead, Anna, your inaudible your line's open. Okay",
+      "sha256": "c769ddb6925529e59d609134ec06c7b9c0d2c39688a75791445e40da05fb20af",
+      "datasetRow": 0
+    },
+    {
+      "id": "4452058_chunk143",
+      "pcm": "4452058_chunk143.f32",
+      "expected": [
+        "HepsiPay"
+      ],
+      "reference": "HepsiPay will enable peer to peer money transfers and will constantly explore new use case scenarios across online and offline. Actually, in line with our Super App value proposition, we'll continue to invest",
+      "sha256": "5276e5880fcabee2440507936c546c975e7d69a63035e7760edef75f67a3b4d8",
+      "datasetRow": 1
+    },
+    {
+      "id": "4480850_chunk135",
+      "pcm": "4480850_chunk135.f32",
+      "expected": [
+        "Ericsson"
+      ],
+      "reference": "And uh, the final one for me with regards to the fact that you bought Ericsson here, here in Q4, can you just uh, uh, talk a bit about them and the, the, the, call it investment process, uh, for those decisions",
+      "sha256": "936e217668f3100522c3653b819c40226e589dbf7823c9952bf6afc92713bb40",
+      "datasetRow": 2
+    },
+    {
+      "id": "4475604_chunk58",
+      "pcm": "4475604_chunk58.f32",
+      "expected": [
+        "Arqit"
+      ],
+      "reference": "in previously identified business opportunities, moving their way through the pipeline towards contract and also new unprompted inbound opportunities arriving through marketing are escalating. Arqit's reputation",
+      "sha256": "7c955547fe55c7c0f8b904269eb05f8aa59171a8e232501ad4e870264816c79e",
+      "datasetRow": 3
+    },
+    {
+      "id": "4481601_chunk9",
+      "pcm": "4481601_chunk9.f32",
+      "expected": [
+        "Urbanimmersive"
+      ],
+      "reference": "minutes and do a short, uh Urbanimmersive deck presentation so that, you know, we can put everyone on the same foot, uh, in regard our\u2026 In regards of the, how the management is seeing Urbanimmersive, how we describe it, and what is, you know, our",
+      "sha256": "a987518745b05f35dff3ae89f73e0448f16fba984e2249011dd5d9d595aa9fdd",
+      "datasetRow": 4
+    },
+    {
+      "id": "4426736_chunk1",
+      "pcm": "4426736_chunk1.f32",
+      "expected": [
+        "Andi",
+        "Setiawan"
+      ],
+      "reference": "one on your telephone. Please be advised that today's conference is being recorded. If you require any further assistance, please press star zero. I would now like to hand the conference over to your first speaker today, Mr. Andi Setiawan",
+      "sha256": "6b2f1299a6687913681a60a2ef09c4659cee8abe8cbd552a7945ec308db7ec79",
+      "datasetRow": 5
+    },
+    {
+      "id": "kennedy-no-target",
+      "pcm": "en-16k.f32",
+      "expected": [],
+      "reference": "Ask not what your country can do for you, ask what you can do for your country."
+    },
+    {
+      "id": "silence-no-target",
+      "pcm": "silence.f32",
+      "expected": [],
+      "reference": ""
+    }
+  ]
+}

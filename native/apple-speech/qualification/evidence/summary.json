@@ -1,0 +1,63 @@
+{
+  "selection": "Preregistered first six unfiltered test rows plus Kennedy and silence controls",
+  "configs": {
+    "default": {
+      "exactTargetPairsFound": 8,
+      "targetPairs": 9,
+      "wordErrors": 31,
+      "referenceWords": 237,
+      "wordErrorRate": 0.1308016877637131,
+      "extraConfiguredTermOccurrences": 1
+    },
+    "conservative": {
+      "exactTargetPairsFound": 8,
+      "targetPairs": 9,
+      "wordErrors": 31,
+      "referenceWords": 237,
+      "wordErrorRate": 0.1308016877637131,
+      "extraConfiguredTermOccurrences": 1
+    },
+    "removed": {
+      "exactTargetPairsFound": 2,
+      "targetPairs": 9,
+      "wordErrors": 38,
+      "referenceWords": 237,
+      "wordErrorRate": 0.16033755274261605,
+      "extraConfiguredTermOccurrences": 0
+    }
+  },
+  "assetsBytes": 102803366,
+  "ctcRevision": "accdafd8cf8a2ff1cabe3c11e54416b405d409aa",
+  "baseline": {
+    "exactTargetPairsFound": 2,
+    "targetPairs": 9,
+    "wordErrors": 38,
+    "referenceWords": 237,
+    "wordErrorRate": 0.16033755274261605,
+    "extraConfiguredTermOccurrences": 0
+  },
+  "warmCTCSeconds": [
+    0.107943417,
+    0.111508708,
+    0.107873167,
+    0.115718542,
+    0.107985291,
+    0.114659917,
+    0.085824875,
+    0.077374084
+  ],
+  "median15sCTCSeconds": 0.1097469995,
+  "baseline15sSeconds": [
+    0.065017166,
+    0.061485958,
+    0.054936375,
+    0.051622209,
+    0.051811125,
+    0.054168458
+  ],
+  "removedContextMatchesBaseline": true,
+  "falseInsertionAcceptancePassed": false,
+  "runtimeSHA256": "83422d071b780ed97fb4dfd6f2665e56c6b7c52abd94b9594cf7be4d2862bb97",
+  "measuredMainSourceSHA256": "e98511a9d0cdb4a79e8e5531b3e0c3c4440b5f21d8690f1868c5b98601cd7f8e",
+  "sdkRevision": "503b4bd1bbf7220882de39fe8ae6716aae4132da"
+}

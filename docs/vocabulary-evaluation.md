@@ -23,3 +23,5 @@ The production CPU path keeps its measured greedy decoder until term tokenizatio
 - Compare live segment delay, peak memory and CPU to the same primary model without vocabulary assistance; no reuse of unrelated upstream performance numbers.
 
 No vocabulary setting is presented as active recognition support in the current app. Transcript correction provides an honest manual recovery path while this adapter is qualified.
+
+The follow-up [acoustic qualification](vocabulary-qualification.md) implements the explicit-local-path prototype and fixed public-speech experiment. It improved several proper names but failed the ordinary-word false-insertion gate, so production remains unchanged.
