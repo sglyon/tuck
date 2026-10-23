@@ -486,6 +486,19 @@ pub fn model_choices(raw: &Value) -> Result<Vec<Value>> {
         .collect())
 }
 impl AccountPort for ChatGptAuth {
+    fn startup_accounts(&self) -> Result<Vec<Value>> {
+        let saved = self
+            .state
+            .lock()
+            .map_err(|_| error("Account state unavailable."))?;
+        Ok(saved.profiles.iter().map(|profile| {
+            // Presence is metadata, not a decrypted token or proof of current plan permission.
+            let connected = self.secrets.contains(&format!("chatgpt:{}", profile.id)).ok().filter(|present| *present);
+            json!({"id":profile.id,"email":profile.email,"label":profile.label,
+                "connected":connected,"sharing":null,"active":saved.active_id.as_ref()==Some(&profile.id)})
+        }).collect())
+    }
+
     fn accounts(&self) -> Result<Vec<Value>> {
         let saved = self
             .state
@@ -746,6 +759,40 @@ mod review_tests {
             secrets.set(&format!("chatgpt:{id}"),&json!({"access_token":format!("token-{id}"),"scopes":[PLAN_SCOPE],"expiresAt":epoch()+3600.,"id_token":format!("verified-{id}")}).to_string()).unwrap();
         }
         (dir, auth, secrets)
+    }
+    #[test]
+    fn startup_account_metadata_never_decrypts_credentials_or_claims_plan_permission() {
+        struct PresenceOnly;
+        impl SecretPort for PresenceOnly {
+            fn contains(&self, kind: &str) -> Result<bool> {
+                Ok(kind == "chatgpt:a")
+            }
+            fn get(&self, _: &str) -> Result<Option<String>> {
+                panic!("Startup must not read a credential")
+            }
+            fn set(&self, _: &str, _: &str) -> Result<()> {
+                unreachable!()
+            }
+            fn delete(&self, _: &str) -> Result<()> {
+                unreachable!()
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let auth = ChatGptAuth::new(dir.path(), Arc::new(PresenceOnly)).unwrap();
+        {
+            let mut saved = auth.state.lock().unwrap();
+            saved.profiles = vec![
+                profile("a", "client-a", "alice"),
+                profile("b", "client-b", "bob"),
+            ];
+            saved.active_id = Some("a".into());
+        }
+        let accounts = auth.startup_accounts().unwrap();
+        assert_eq!(accounts[0]["connected"], true);
+        assert!(accounts[1]["connected"].is_null());
+        assert_eq!(accounts[0]["active"], true);
+        assert!(accounts.iter().all(|a| a["sharing"].is_null()));
+        assert_eq!(accounts[0]["email"], "a@example.test");
     }
     #[test]
     fn local_accounts_preserve_host_and_redact_credentials() {

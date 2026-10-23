@@ -309,6 +309,10 @@ impl PublicationPort for Publisher {
 #[derive(Default)]
 struct Secrets(Mutex<std::collections::HashMap<String, String>>);
 impl SecretPort for Secrets {
+    fn contains(&self, k: &str) -> Result<bool> {
+        Ok(self.0.lock().unwrap().get(k).is_some_and(|v| !v.is_empty()))
+    }
+
     fn get(&self, k: &str) -> Result<Option<String>> {
         Ok(self.0.lock().unwrap().get(k).cloned())
     }
@@ -2367,6 +2371,49 @@ fn checkpoint_interval_and_legacy_or_changed_clocks_preserve_a_fresh_prior_state
                 Ok(Value::Null)
             })
             .unwrap();
+        }
+    }
+}
+
+#[test]
+fn bootstrap_credential_flags_use_presence_without_reading_or_decrypting_values() {
+    struct PresenceOnly;
+    impl SecretPort for PresenceOnly {
+        fn contains(&self, kind: &str) -> Result<bool> {
+            Ok(kind == "notion")
+        }
+        fn get(&self, _: &str) -> Result<Option<String>> {
+            panic!("Startup attempted to decrypt a credential");
+        }
+        fn set(&self, _: &str, _: &str) -> Result<()> {
+            panic!("Startup attempted to write a credential");
+        }
+        fn delete(&self, _: &str) -> Result<()> {
+            panic!("Startup attempted to delete a credential");
+        }
+    }
+    for store in stores() {
+        let r = rig(store.clone());
+        let service = MeetingService::new(
+            store,
+            Adapters {
+                capture: r.capture.clone(),
+                intelligence: r.ai.clone(),
+                publisher: r.publisher.clone(),
+                secrets: Arc::new(PresenceOnly),
+                accounts: Arc::new(Accounts),
+                archive: r.archive.clone(),
+            },
+            Arc::new(|_, _| {}),
+        )
+        .unwrap();
+        let settings = call(&service, "get_settings", json!({}));
+        assert_eq!(settings["hasNotionToken"], true);
+        assert_eq!(settings["hasOpenAIKey"], false);
+        for method in ["bootstrap_library", "bootstrap"] {
+            let startup = call(&service, method, json!({}));
+            assert_eq!(startup["settings"]["hasNotionToken"], true);
+            assert_eq!(startup["settings"]["hasOpenAIKey"], false);
         }
     }
 }

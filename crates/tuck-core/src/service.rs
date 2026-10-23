@@ -165,8 +165,8 @@ impl MeetingService {
         Ok(())
     }
     fn credential_flag(&self, kind: &str) -> bool {
-        match self.adapters.secrets.get(kind) {
-            Ok(v) => v.is_some_and(|s| !s.is_empty()),
+        match self.adapters.secrets.contains(kind) {
+            Ok(present) => present,
             Err(_) => {
                 if let Ok(mut state) = self.state.lock() {
                     let message="The credential store is unavailable. Local recording remains available; unlock your system credential store to use integrations.";
@@ -686,7 +686,11 @@ impl MeetingService {
             "bootstrap_library" => {
                 let query = crate::library::LibraryQuery::from_value(p, false)?;
                 let settings = self.get_settings()?;
-                let accounts = self.adapters.accounts.accounts().unwrap_or_default();
+                let accounts = self
+                    .adapters
+                    .accounts
+                    .startup_accounts()
+                    .unwrap_or_default();
                 let mut result = self.transaction(|r| Ok(json!({"meetingPage":r.meeting_page(&query)?,"library":r.library_overview()?})))?;
                 result["settings"] = settings;
                 result["accounts"] = json!(accounts);
@@ -705,7 +709,11 @@ impl MeetingService {
             "get_meeting" => self.meeting(string(p, "meetingId")?),
             "bootstrap" => {
                 let settings = self.get_settings()?;
-                let accounts = self.adapters.accounts.accounts().unwrap_or_default();
+                let accounts = self
+                    .adapters
+                    .accounts
+                    .startup_accounts()
+                    .unwrap_or_default();
                 let meetings = self.transaction(|r| {
                     let mut values = Vec::new();
                     for m in r.list()? {

@@ -183,8 +183,8 @@ export interface Account {
   id: string;
   email: string;
   label: string;
-  connected: boolean;
-  sharing: boolean;
+  connected: boolean | null;
+  sharing: boolean | null;
   active: boolean;
 }
 export interface ModelOption {

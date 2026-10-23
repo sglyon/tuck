@@ -109,11 +109,22 @@ pub trait PublicationPort: Send + Sync {
     fn publish(&self, target: &str, meeting: &Value) -> Result<String>;
 }
 pub trait SecretPort: Send + Sync {
+    /// Presence only. Native stores that can prompt on reads must override with a
+    /// non-interactive metadata query. Legacy adapters retain their existing read behavior.
+    fn contains(&self, kind: &str) -> Result<bool> {
+        self.get(kind)
+            .map(|value| value.is_some_and(|secret| !secret.is_empty()))
+    }
     fn get(&self, kind: &str) -> Result<Option<String>>;
     fn set(&self, kind: &str, value: &str) -> Result<()>;
     fn delete(&self, kind: &str) -> Result<()>;
 }
 pub trait AccountPort: Send + Sync {
+    /// Bootstrap metadata: native adapters must not decrypt credentials or refresh tokens.
+    fn startup_accounts(&self) -> Result<Vec<Value>> {
+        self.accounts()
+    }
+
     /// Local metadata only: bootstrap must never refresh credentials or contact a server.
     fn accounts(&self) -> Result<Vec<Value>>;
     fn sign_in(&self, account_id: Option<&str>) -> Result<Vec<Value>>;

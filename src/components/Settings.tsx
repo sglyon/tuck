@@ -293,16 +293,20 @@ export default function Settings({
                       <div>
                         <strong>{a.email || a.label}</strong>
                         <small>
-                          {a.connected
-                            ? a.sharing
-                              ? "Plan usage enabled"
-                              : "Identity connected · plan usage unavailable"
-                            : "Signed out"}
+                          {a.connected === null
+                            ? "Connection needs checking"
+                            : a.connected
+                              ? a.sharing === null
+                                ? "Connected · permissions checked when you use AI"
+                                : a.sharing
+                                  ? "Plan usage enabled"
+                                  : "Identity connected · plan usage unavailable"
+                              : "Signed out"}
                           {a.active ? " · Active" : ""}
                         </small>
                       </div>
                       <div className="account-actions">
-                        {!a.active && a.connected && (
+                        {!a.active && a.connected !== false && (
                           <button
                             className="button subtle compact"
                             onClick={() =>
