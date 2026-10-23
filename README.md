@@ -28,6 +28,12 @@ Hosted processing requires an explicit setting. It sends transcript context, not
 
 Automatic recap generation is opt-in. Personal notes are never replaced by an AI recap. Speaker labels are provisional until you name them; the optional speaker model clusters voices within a meeting and does not identify people by name.
 
+## Live meeting agents
+
+In **Settings → Intelligence → Meeting agents**, edit the Quiet meeting helper and Sales coach or add your own monitoring goals. Choose up to three agents in the assistant pane and turn them on for that call. Agents offer transcript-linked questions, insights and follow-ups; Save follow-up explicitly adds a task for review. They cannot send messages, browse or act on your behalf.
+
+Agents share your selected AI provider. Automatic context contains a bounded recent transcript window, the selected instructions and a few earlier tips; it excludes handwritten notes, meeting metadata and manual chat. Monitoring pauses with recording and stops when the call ends. It starts off again after restart or an AI destination/account change. Quiet pacing, bounded requests and a three-open-tip limit keep help unobtrusive. See [behavior and limits](docs/live-coach-contract.md) and [verification](docs/native-verification.md).
+
 ## A meeting day
 
 Use the tray menu or **⌘/Ctrl ⇧ R** to start a meeting. The shortcut checks setup first; opening or importing a calendar event never starts recording. Connect the device calendar on macOS or import a local `.ics` snapshot. Next meeting opens preparation notes with the title and attendees; returning to the same occurrence reuses your existing notes. Optional five-minute reminders appear in Tuck, with system notifications where available while the app is running. Reminders stay quiet during recording, and never join a call or start capture. Calendar snapshots remain on this device and are excluded from portable backups. Audio settings include device selection and an explicit five-second sound check that does not save or transcribe audio.
