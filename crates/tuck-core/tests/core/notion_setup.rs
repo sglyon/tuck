@@ -348,3 +348,182 @@ fn restoring_safe_preferences_invalidates_a_delayed_creation_response() {
         );
     }
 }
+
+#[test]
+fn finishing_layout_requires_the_verified_parent_and_current_destination() {
+    for store in stores() {
+        let r = rig(store);
+        assert!(r.service.finish_notion_database(PARENT).is_err());
+        connect(&r);
+        assert!(r.service.finish_notion_database(PARENT).is_err());
+        assert!(r.publisher.finished.lock().unwrap().is_empty());
+        r.publisher
+            .provision_outcomes
+            .lock()
+            .unwrap()
+            .push(Err(AppError::new(
+                "notion_setup_uncertain",
+                "Creation response was lost.",
+            )));
+        assert!(r.service.create_notion_database(PARENT).is_err());
+        assert!(r.service.finish_notion_database(PARENT).is_err());
+        r.service.create_notion_database(PARENT).unwrap();
+        assert!(r.service.finish_notion_database(NEW_DATABASE).is_err());
+        call(
+            &r.service,
+            "update_settings",
+            json!({"changes":{"notionTarget":NEW_DATABASE,"notionPropertyMapping":{}}}),
+        );
+        assert!(r.service.finish_notion_database(PARENT).is_err());
+        assert!(r.publisher.finished.lock().unwrap().is_empty());
+        assert_eq!(
+            *r.publisher.provisioned.lock().unwrap(),
+            vec![(PARENT.into(), true), (PARENT.into(), false)]
+        );
+    }
+}
+
+#[test]
+fn finishing_layout_has_an_explicit_port_and_preserves_ready_database_on_failure() {
+    for store in stores() {
+        let r = rig(store);
+        connect(&r);
+        let mut destination = r.publisher.provision_result().unwrap();
+        destination["setupWarning"] =
+            json!("The database is ready; its table layout is unfinished.");
+        r.publisher
+            .provision_outcomes
+            .lock()
+            .unwrap()
+            .push(Ok(destination.clone()));
+        r.service.create_notion_database(PARENT).unwrap();
+        r.publisher
+            .provision_outcomes
+            .lock()
+            .unwrap()
+            .push(Err(AppError::new(
+                "notion_layout_incomplete",
+                "The layout could not be saved. Your database is still ready.",
+            )));
+        assert_eq!(
+            r.service.finish_notion_database(PARENT).unwrap_err().code,
+            "notion_layout_incomplete"
+        );
+        let settings = r.service.get_settings().unwrap();
+        assert_eq!(settings["notionTarget"], DATABASE);
+        assert_eq!(settings["notionSetup"]["status"], "ready");
+        assert_eq!(
+            settings["notionSetup"]["message"],
+            "The layout could not be saved. Your database is still ready."
+        );
+        assert_eq!(settings["notionAutoSync"], false);
+        assert_eq!(
+            *r.publisher.finished.lock().unwrap(),
+            vec![PARENT.to_owned()]
+        );
+        assert_eq!(
+            *r.publisher.provisioned.lock().unwrap(),
+            vec![(PARENT.into(), true)]
+        );
+
+        // Checking after a failed layout finish stays read-only. It does not call
+        // the explicit finishing port or regain permission to create a database.
+        r.publisher
+            .provision_outcomes
+            .lock()
+            .unwrap()
+            .push(Ok(destination));
+        r.service.create_notion_database(PARENT).unwrap();
+        assert_eq!(
+            *r.publisher.finished.lock().unwrap(),
+            vec![PARENT.to_owned()]
+        );
+        assert_eq!(
+            *r.publisher.provisioned.lock().unwrap(),
+            vec![(PARENT.into(), true), (PARENT.into(), false)]
+        );
+        let custom_mapping = json!({"date":"My meeting date","folder":"","tags":"My topics","people":"Attendees","meetingId":"My reference"});
+        call(
+            &r.service,
+            "update_settings",
+            json!({"changes":{"notionPropertyMapping":custom_mapping}}),
+        );
+        let finished = call(
+            &r.service,
+            "notion_finish_database",
+            json!({"parent":PARENT}),
+        );
+        assert_eq!(finished["settings"]["notionSetup"]["status"], "ready");
+        assert!(finished["settings"]["notionSetup"]["message"].is_null());
+        assert_eq!(finished["settings"]["notionTarget"], DATABASE);
+        assert_eq!(
+            finished["settings"]["notionPropertyMapping"],
+            custom_mapping
+        );
+        assert_eq!(
+            *r.publisher.finished.lock().unwrap(),
+            vec![PARENT.to_owned(), PARENT.to_owned()]
+        );
+        assert_eq!(r.publisher.provisioned.lock().unwrap().len(), 2);
+    }
+}
+
+#[test]
+fn finishing_layout_never_selects_a_different_or_delayed_destination() {
+    for concurrent_selection in [false, true] {
+        for store in stores() {
+            let r = rig(store);
+            connect(&r);
+            r.service.create_notion_database(PARENT).unwrap();
+            if concurrent_selection {
+                let service = Arc::downgrade(&r.service);
+                *r.publisher.finish_hook.lock().unwrap() = Some(Box::new(move || {
+                    call(
+                        &service.upgrade().unwrap(),
+                        "update_settings",
+                        json!({"changes":{
+                            "notionTarget":NEW_DATABASE,"notionPropertyMapping":{"date":"New date"}
+                        }}),
+                    );
+                }));
+            } else {
+                let mut wrong_destination = r.publisher.provision_result().unwrap();
+                wrong_destination["id"] = json!(NEW_DATABASE);
+                r.publisher
+                    .provision_outcomes
+                    .lock()
+                    .unwrap()
+                    .push(Ok(wrong_destination));
+            }
+            let result = r.service.finish_notion_database(PARENT);
+            assert!(result.is_err());
+            if concurrent_selection {
+                assert_eq!(result.unwrap_err().code, "notion_setup_changed");
+            }
+            let settings = r.service.get_settings().unwrap();
+            assert_eq!(
+                settings["notionTarget"],
+                if concurrent_selection {
+                    NEW_DATABASE
+                } else {
+                    DATABASE
+                }
+            );
+            if concurrent_selection {
+                assert_eq!(
+                    settings["notionPropertyMapping"],
+                    json!({"date":"New date"})
+                );
+            }
+            assert_eq!(settings["notionSetup"]["destination"]["id"], DATABASE);
+            assert_eq!(
+                *r.publisher.finished.lock().unwrap(),
+                vec![PARENT.to_owned()]
+            );
+            assert_eq!(
+                *r.publisher.provisioned.lock().unwrap(),
+                vec![(PARENT.into(), true)]
+            );
+        }
+    }
+}

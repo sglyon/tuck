@@ -51,11 +51,11 @@ export default function NotionDestination({ settings, onUpdate, notify }: {
     setParents(result.pages);
     setParentsMore(result.hasMore);
   };
-  const create = async () => {
-    if (busy || !setupParent) return;
-    setBusy("create"); setSetupError("");
+  const create = async (parentId = setupParent, mode: "create" | "finish" = "create") => {
+    if (busy || !parentId) return;
+    setBusy(mode); setSetupError("");
     try {
-      const result = await call<{ destination: Schema; settings: Settings }>("notion_create_database", { parent: setupParent });
+      const result = await call<{ destination: Schema; settings: Settings }>(mode === "finish" ? "notion_finish_database" : "notion_create_database", { parent: parentId });
       setSchema(result.destination);setSchemaTarget(result.settings.notionTarget);
       // Native setup already saved the destination and mapping atomically. Refresh,
       // rather than saving an older snapshot over a concurrent settings change.
@@ -78,7 +78,21 @@ export default function NotionDestination({ settings, onUpdate, notify }: {
     ["meetingId", "Tuck meeting ID", ["rich_text"]],
   ] as const;
   return <div className="notion-destination">
-    {ready && !creating && <div className="notion-template-ready"><Check size={16} /><div><strong>{ready.title}</strong><p>Your meeting database is ready. Meeting details are mapped for you.</p>{setup?.message && <p className="quiet-note" role="status">{setup.message}</p>}<a className="text-link" href={ready.url} onClick={e => {e.preventDefault();void openExternal(ready.url);}}>Open database in Notion<ArrowRight size={13} /></a></div></div>}
+    {ready && !creating && <div className="notion-template-ready">
+      <Check size={16} />
+      <div>
+        <strong>{ready.title}</strong>
+        <p>Your meeting database is ready. Meeting details are mapped for you.</p>
+        {setup?.message && <p className="quiet-note" role="status">{setup.message}</p>}
+        {setupError && <p className="quiet-note" role="alert">{setupError}</p>}
+        <div className="notion-template-actions">
+          {setup?.message && <button className="button secondary compact" disabled={!!busy || !setup.parent} onClick={() => void create(setup.parent, "finish")}>
+            {busy === "finish" ? <><LoaderCircle size={14} className="spin" />Finishing setup…</> : "Finish database setup"}
+          </button>}
+          <a className="text-link" href={ready.url} onClick={e => {e.preventDefault();void openExternal(ready.url);}}>Open database in Notion<ArrowRight size={13} /></a>
+        </div>
+      </div>
+    </div>}
     {settings.notionTarget && !ready && <div className="notion-template-ready"><Check size={16} /><div><strong>{verifiedSchema?.title || "Database selected"}</strong><p>{destinationError || (verifiedSchema ? "Meeting notes will be published to this database." : "Loading the selected database…")}</p></div></div>}
     {!creating && !uncertain && !ready && <div className="notion-template-intro">
       <p>A ready-to-use meeting database, with consistent details and space for your recap, notes and action items.</p>

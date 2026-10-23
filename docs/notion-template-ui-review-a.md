@@ -51,3 +51,9 @@ The entry has a primary creation choice and a secondary existing-database disclo
 - **Casey, interrupted compact-screen user:** the completed destination and uncertain journal survive app interruption, and compact primary actions remain inside the content width. The app still needs separate native mobile capture and mobile OS acceptance; a 390px fixture is not that qualification.
 
 Questions skipped: the user has already authorized implementation and refinement; this is an internal acceptance assessment, not a new design-direction interview.
+
+## Bounded source confirmation
+
+The author addressed both P2 findings in the permitted correction batch: the ready destination now retains `setup.message` as a status beside its open link, and schema state is cleared on target changes and explicitly bound to `schemaTarget` before mapping controls are rendered. The view API recovery extension adds **Finish database setup** beside the qualified ready state. It reuses the incumbent secondary compact button and wrapping action group, disables while another action runs, labels its own pending state, and reports failure inline without removing the ready destination. The separate native finishing use case cannot create another database or view; ordinary checking remains read-only. These changes close the specific source findings without changing the visual world or adding another configuration decision to the normal completed path.
+
+This confirmation inspected source only; no additional screenshots, live overlays, or detector run were performed. The orchestrator owns actual native finishing acceptance. The conservative **31/40** score is unchanged. The repeated uncertainty copy remains explicitly deferred P3 polish, and native VoiceOver/keyboard acceptance remains unqualified.

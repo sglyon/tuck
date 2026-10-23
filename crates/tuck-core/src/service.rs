@@ -885,6 +885,7 @@ impl MeetingService {
                 Some(value) => domain::text(value, "Search", 240, true)?,
             }),
             "notion_create_database" => self.create_notion_database(string(p, "parent")?),
+            "notion_finish_database" => self.finish_notion_database(string(p, "parent")?),
             "notion_destination" => {
                 let settings = self.get_settings()?;
                 let target = domain::text(

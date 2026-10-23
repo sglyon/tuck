@@ -53,6 +53,61 @@ fn template_payload(parent: &str) -> Value {
     })
 }
 
+fn empty_setting(value: &Value) -> bool {
+    value.is_null()
+        || value.as_array().is_some_and(Vec::is_empty)
+        || value.as_object().is_some_and(Map::is_empty)
+}
+
+/// Existing user layouts must not be silently restyled by a setup retry.
+fn untouched_initial_view(view: &Value) -> bool {
+    matches!(
+        view["name"].as_str(),
+        Some("" | "Default view" | "Table" | "Table view")
+    ) && view["created_time"].as_str().is_some_and(|created| {
+        !created.is_empty()
+            && chrono::DateTime::parse_from_rfc3339(created).is_ok()
+            && view["last_edited_time"].as_str() == Some(created)
+    }) && empty_setting(&view["filter"])
+        && empty_setting(&view["sorts"])
+        && empty_setting(&view["quick_filters"])
+        && empty_setting(&view["configuration"]["group_by"])
+        && empty_setting(&view["configuration"]["subtasks"])
+}
+
+fn matches_template_view(view: &Value, desired: &Value) -> bool {
+    view["name"] == desired["name"]
+        && empty_setting(&view["filter"])
+        && empty_setting(&view["configuration"]["group_by"])
+        && view["sorts"] == desired["sorts"]
+        && view["configuration"]["type"] == "table"
+        && view["configuration"]["wrap_cells"] == false
+        && view["configuration"]["properties"]
+            .as_array()
+            .is_some_and(|actual| {
+                let expected = desired["configuration"]["properties"].as_array().unwrap();
+                actual.len() == expected.len()
+                    && actual.iter().zip(expected).all(|(a, b)| {
+                        a["property_id"] == b["property_id"]
+                            && a["visible"] == b["visible"]
+                            && a["width"].as_f64() == b["width"].as_f64()
+                            && a["wrap"] == b["wrap"]
+                    })
+            })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LayoutOperation {
+    Inspect,
+    Initialize,
+    Finish,
+}
+enum LayoutState {
+    Ready,
+    Pending,
+    Customized,
+}
+
 impl NotionPublisher {
     pub(super) fn template_parents(&self, query: &str) -> Result<Value> {
         if query.chars().count() > 200 {
@@ -136,9 +191,14 @@ impl NotionPublisher {
         )
     }
 
-    /// Update only the initial view of a newly created, verified database. No extra
-    /// view creation is needed, so even an ambiguous PATCH cannot duplicate views.
-    fn initial_template_view(&self, token: &str, database: &Value) -> Result<()> {
+    /// Inspect the initial view; writes occur only at creation or through the
+    /// explicit guarded finishing action. A PATCH cannot duplicate views.
+    fn initial_template_view(
+        &self,
+        token: &str,
+        database: &Value,
+        operation: LayoutOperation,
+    ) -> Result<LayoutState> {
         let database_id = database["databaseId"].as_str().unwrap();
         let views = self.send(
             token,
@@ -152,35 +212,116 @@ impl NotionPublisher {
                 "The database is ready. Its initial table view could not be configured.",
             ));
         }
-        let views = views["results"]
-            .as_array()
-            .filter(|v| v.len() == 1)
-            .ok_or_else(|| {
-                setup_error(
+        let views = views["results"].as_array().ok_or_else(|| {
+            setup_error("The database is ready. Its initial table view could not be configured.")
+        })?;
+        if views.len() != 1 {
+            return if operation == LayoutOperation::Initialize {
+                Err(setup_error(
                     "The database is ready. Its initial table view could not be configured.",
-                )
-            })?;
-        let view = &views[0];
-        if view["type"] != "table" || id(&view["parent"]["database_id"])? != database_id {
+                ))
+            } else {
+                Ok(LayoutState::Customized)
+            };
+        }
+        // List views returns references containing only object/id. Retrieve the
+        // full view before checking ownership, type, or presentation settings.
+        let view_id = id(&views[0]["id"])?;
+        let view = self.send(
+            token,
+            Method::GET,
+            &format!("/views/{view_id}"),
+            None,
+            false,
+        )?;
+        if view["object"] != "view"
+            || view["parent"]["type"] != "database_id"
+            || id(&view["parent"]["database_id"])? != database_id
+            || id(&view["data_source_id"])? != database["id"].as_str().unwrap()
+        {
             return Err(setup_error(
                 "The database is ready. Its initial table view could not be configured.",
             ));
         }
-        let view_id = id(&view["id"])?;
+        if view["type"] != "table" {
+            return if operation == LayoutOperation::Initialize {
+                Err(setup_error(
+                    "The database is ready. Its initial table view could not be configured.",
+                ))
+            } else {
+                Ok(LayoutState::Customized)
+            };
+        }
+        if id(&view["id"])? != view_id {
+            return Err(setup_error(
+                "Notion returned a different table view. No layout was changed.",
+            ));
+        }
         let columns = COLUMNS.iter().map(|(name,_)| {
             let property_id = database["source"]["properties"][name]["id"].as_str()
                 .filter(|s| !s.is_empty() && s.len() <= 100)
                 .ok_or_else(|| setup_error("The database is ready. Notion did not return its column IDs."))?;
             Ok(json!({"property_id":property_id,"visible":*name != "Tuck meeting ID" && *name != "Added to Notion","width":if *name == "Name"{320}else{180},"wrap":*name == "Name"}))
         }).collect::<Result<Vec<_>>>()?;
-        self.send(token, Method::PATCH, &format!("/views/{view_id}"), Some(&json!({
+        let desired = json!({
             "name":"Recent meetings","sorts":[{"property":"Meeting date","direction":"descending"}],
             "configuration":{"type":"table","properties":columns,"wrap_cells":false}
-        })), true)?;
-        Ok(())
+        });
+        if matches_template_view(&view, &desired) {
+            return Ok(LayoutState::Ready);
+        }
+        if operation != LayoutOperation::Initialize && !untouched_initial_view(&view) {
+            return Ok(LayoutState::Customized);
+        }
+        if operation == LayoutOperation::Inspect {
+            return Ok(LayoutState::Pending);
+        }
+        self.send(
+            token,
+            Method::PATCH,
+            &format!("/views/{view_id}"),
+            Some(&desired),
+            true,
+        )?;
+        Ok(LayoutState::Ready)
+    }
+
+    fn template_layout_result(&self, token: &str, result: &mut Value, operation: LayoutOperation) {
+        match self.initial_template_view(token, result, operation) {
+            Ok(LayoutState::Ready) => {
+                result["layoutReady"] = json!(true);
+            }
+            Ok(LayoutState::Pending) => {
+                result["layoutReady"] = json!(false);
+                result["setupWarning"] = json!("Your database and columns are ready. Finish setup to apply Tuck’s Recent meetings table layout.");
+            }
+            Ok(LayoutState::Customized) => {
+                result["layoutReady"] = json!(false);
+                result["layoutCustomized"] = json!(true);
+                result["layoutMessage"] =
+                    json!("Using your current Notion view. Tuck kept its custom layout.");
+            }
+            Err(_) => {
+                result["layoutReady"] = json!(false);
+                result["setupWarning"] = json!("Your database and columns are ready. Notion could not apply the Recent meetings table layout; you can try finishing setup again.");
+            }
+        }
     }
 
     pub(super) fn template_provision(&self, parent: &str, allow_create: bool) -> Result<Value> {
+        self.template_provision_mode(parent, allow_create, false)
+    }
+
+    pub(super) fn template_finish_provision(&self, parent: &str) -> Result<Value> {
+        self.template_provision_mode(parent, false, true)
+    }
+
+    fn template_provision_mode(
+        &self,
+        parent: &str,
+        allow_create: bool,
+        finish_layout: bool,
+    ) -> Result<Value> {
         let parent = target_id(parent)
             .map_err(|_| setup_error("Choose a shared Notion page for your Tuck database."))?;
         // One credential snapshot is used for the entire operation.
@@ -228,6 +369,15 @@ impl NotionPublisher {
             }
         }
         if let Some(mut result) = owned {
+            self.template_layout_result(
+                &token,
+                &mut result,
+                if finish_layout {
+                    LayoutOperation::Finish
+                } else {
+                    LayoutOperation::Inspect
+                },
+            );
             result.as_object_mut().unwrap().remove("source");
             result["reused"] = json!(true);
             return Ok(result);
@@ -268,9 +418,7 @@ impl NotionPublisher {
         let mut result = self
             .verify_template(&token, &database, &parent)
             .map_err(|_| setup_uncertain_at(&database_id))?;
-        if self.initial_template_view(&token, &result).is_err() {
-            result["setupWarning"] = json!("Your database and columns are ready. Notion could not apply the Recent meetings table layout; you can arrange its view in Notion.");
-        }
+        self.template_layout_result(&token, &mut result, LayoutOperation::Initialize);
         result.as_object_mut().unwrap().remove("source");
         result["reused"] = json!(false);
         Ok(result)
@@ -340,8 +488,24 @@ mod tests {
             "GET",
             format!("/views?database_id={DATABASE}&page_size=100"),
             200,
-            json!({"results":[{"id":VIEW,"type":"table","parent":{"database_id":DATABASE}}],"has_more":false}),
+            json!({"object":"list","results":[{"object":"view","id":VIEW}],"has_more":false,"next_cursor":null}),
         )
+    }
+    fn initial_view() -> Value {
+        json!({"object":"view","id":VIEW,"parent":{"type":"database_id","database_id":DATABASE},
+            "data_source_id":SOURCE,"type":"table","name":"Default view","filter":null,"sorts":[],
+            "configuration":{"type":"table"},"created_time":"2026-10-23T12:00:00.000Z","last_edited_time":"2026-10-23T12:00:00.000Z"})
+    }
+    fn detail_step(view: Value) -> Step {
+        ("GET", format!("/views/{VIEW}"), 200, view)
+    }
+    fn configured_view() -> Value {
+        let mut view = initial_view();
+        view["name"] = json!("Recent meetings");
+        view["sorts"] = json!([{"property":"Meeting date","direction":"descending"}]);
+        view["configuration"] = json!({"type":"table","wrap_cells":false,"properties":
+            COLUMNS.iter().enumerate().map(|(index,(name,_))| json!({"property_id":format!("column{index}"),"visible":*name != "Tuck meeting ID" && *name != "Added to Notion","width":if *name == "Name"{320}else{180},"wrap":*name == "Name"})).collect::<Vec<_>>()});
+        view
     }
     #[test]
     fn discovers_only_shared_active_pages_and_respects_bounds() {
@@ -374,6 +538,7 @@ mod tests {
             database_step(database()),
             source_step(source()),
             view_step(),
+            detail_step(initial_view()),
             ("PATCH", format!("/views/{VIEW}"), 200, json!({"id":VIEW})),
         ]);
         let result = publisher.provision(PARENT, true).unwrap();
@@ -402,7 +567,7 @@ mod tests {
             Some(TEMPLATE_MARKER)
         );
         assert!(seen.iter().all(|r| r["path"] != "/pages"));
-        let view = &seen[6]["body"];
+        let view = &seen[7]["body"];
         assert_eq!(
             view["sorts"][0],
             json!({"property":"Meeting date","direction":"descending"})
@@ -415,15 +580,28 @@ mod tests {
     }
     #[test]
     fn check_only_reuses_verified_template_and_preserves_customized_views() {
-        let (publisher, worker) = script(vec![
-            parent_step(),
-            children_step(json!([child()])),
-            database_step(database()),
-            source_step(source()),
-        ]);
-        let result = publisher.provision(PARENT, false).unwrap();
-        assert_eq!(result["reused"], true);
-        assert!(worker.join().unwrap().iter().all(|r| r["method"] == "GET"));
+        let mut custom = initial_view();
+        custom["name"] = json!("My team view");
+        for (view, ready, warning, customized) in [
+            (initial_view(), false, true, false),
+            (configured_view(), true, false, false),
+            (custom, false, false, true),
+        ] {
+            let (publisher, worker) = script(vec![
+                parent_step(),
+                children_step(json!([child()])),
+                database_step(database()),
+                source_step(source()),
+                view_step(),
+                detail_step(view),
+            ]);
+            let result = publisher.provision(PARENT, false).unwrap();
+            assert_eq!(result["reused"], true);
+            assert_eq!(result["layoutReady"], ready);
+            assert_eq!(result.get("setupWarning").is_some(), warning);
+            assert_eq!(result["layoutCustomized"] == true, customized);
+            assert!(worker.join().unwrap().iter().all(|r| r["method"] == "GET"));
+        }
         let (publisher, worker) = script(vec![parent_step(), children_step(json!([]))]);
         assert_eq!(
             publisher.provision(PARENT, false).unwrap_err().code,
@@ -470,6 +648,8 @@ mod tests {
                 children_step(json!([child()])),
                 database_step(database()),
                 source_step(source()),
+                view_step(),
+                detail_step(initial_view()),
             ]);
             assert_eq!(
                 publisher.provision(PARENT, true).unwrap_err().code,
@@ -537,6 +717,69 @@ mod tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn explicit_finish_retrieves_reference_and_initializes_default_view_once_without_database_creation(
+    ) {
+        let mut steps = vec![
+            parent_step(),
+            children_step(json!([child()])),
+            database_step(database()),
+            source_step(source()),
+            view_step(),
+            detail_step(initial_view()),
+            ("PATCH", format!("/views/{VIEW}"), 200, json!({"id":VIEW})),
+        ];
+        steps.extend([
+            parent_step(),
+            children_step(json!([child()])),
+            database_step(database()),
+            source_step(source()),
+            view_step(),
+            detail_step(configured_view()),
+        ]);
+        let (publisher, worker) = script(steps);
+        for _ in 0..2 {
+            let ready = publisher.template_finish_provision(PARENT).unwrap();
+            assert_eq!(ready["reused"], true);
+            assert_eq!(ready["layoutReady"], true);
+            assert!(ready.get("setupWarning").is_none());
+        }
+        let seen = worker.join().unwrap();
+        assert_eq!(seen.iter().filter(|r| r["method"] == "PATCH").count(), 1);
+        assert!(seen.iter().all(|r| r["method"] != "POST"));
+    }
+    #[test]
+    fn explicit_finish_preserves_modified_or_unverifiable_initial_views() {
+        for (field, value) in [
+            ("name", json!("My sales meetings")),
+            ("last_edited_time", json!("2026-10-23T12:01:00.000Z")),
+            ("created_time", Value::Null),
+            (
+                "filter",
+                json!({"property":"Folder","select":{"equals":"Sales"}}),
+            ),
+            (
+                "sorts",
+                json!([{"property":"Folder","direction":"ascending"}]),
+            ),
+        ] {
+            let mut view = initial_view();
+            view[field] = value;
+            let (publisher, worker) = script(vec![
+                parent_step(),
+                children_step(json!([child()])),
+                database_step(database()),
+                source_step(source()),
+                view_step(),
+                detail_step(view),
+            ]);
+            let ready = publisher.template_finish_provision(PARENT).unwrap();
+            assert_eq!(ready["id"], SOURCE);
+            assert_eq!(ready["layoutCustomized"], true);
+            assert!(ready.get("setupWarning").is_none());
+            assert!(worker.join().unwrap().iter().all(|r| r["method"] == "GET"));
+        }
     }
     #[test]
     fn rejects_unavailable_parent_and_excessive_or_duplicate_databases_before_writing() {

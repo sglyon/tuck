@@ -3,7 +3,7 @@ import { defaults } from "../../src/lib/bridge";
 import { exampleMeeting } from "../../src/lib/example";
 import { installLeanLibraryPort } from "./support/lean-library";
 
-async function fixture(page: Page, options: {empty?:boolean; searchFails?:boolean; uncertain?:boolean; resumed?:boolean; automatic?:boolean; previousReady?:boolean; readyWarning?:boolean; schemaError?:boolean} = {}) {
+async function fixture(page: Page, options: {empty?:boolean; searchFails?:boolean; uncertain?:boolean; resumed?:boolean; automatic?:boolean; previousReady?:boolean; readyWarning?:boolean; schemaError?:boolean; finishFails?:boolean} = {}) {
   await installLeanLibraryPort(page);
   await page.addInitScript(({settings,meeting,options}) => {
     const w=window as any;
@@ -35,7 +35,9 @@ async function fixture(page: Page, options: {empty?:boolean; searchFails?:boolea
         if(options.searchFails)throw new Error("Notion could not be reached. Find pages again when your connection returns.");
         return {pages:options.empty?[]:[{id:"parent-page",title:"Tuck",url:"https://notion.so/tuck"},{id:"other-page",title:"Company knowledge",url:"https://notion.so/company"}],hasMore:false};
       }
-      if(method==="notion_create_database"){
+      if(method==="notion_create_database" || method==="notion_finish_database"){
+        if(method==="notion_finish_database" && settings.notionSetup?.status!=="ready")throw new Error("Choose the ready database before finishing setup.");
+        if(options.finishFails && settings.notionSetup?.status==="ready")throw new Error("Database setup could not be finished. Check again when your connection returns.");
         if(!settings.notionSetup){w.__remoteCreates++;settings.notionSetup={parent:p.parent,status:"creating"};}
         if(uncertain){settings.notionSetup={parent:p.parent,status:"uncertain",message:"The database may have been created. Check to continue."};throw {code:"notion_creation_uncertain",message:"The database may have been created. Check to continue."};}
         settings.notionTarget=destination.id;settings.notionPropertyMapping=mapping;settings.notionSetup={parent:p.parent,status:"ready",destination:{id:destination.id,title:destination.title,url:destination.url}};
@@ -129,6 +131,29 @@ test("ready database layout warnings remain visible after reopening settings",as
   await page.getByRole("tab",{name:"Intelligence",exact:true}).click();await page.getByRole("tab",{name:"Notion",exact:true}).click();
   await expect(page.getByRole("status").filter({hasText:"date sort could not be applied"})).toBeVisible();
   expect((await calls(page)).map((c:any)=>c.method)).not.toContain("notion_create_database");
+});
+test("finishing a ready database setup reuses the original parent and clears its warning",async({page})=>{
+  await fixture(page,{readyWarning:true});
+  await page.getByRole("button",{name:"Finish database setup",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Finish database setup",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("status").filter({hasText:"date sort could not be applied"})).toHaveCount(0);
+  const requests=(await calls(page)).filter((c:any)=>c.method==="notion_finish_database");expect(requests).toHaveLength(1);expect(requests[0].params).toEqual({parent:"parent-page"});
+  expect(await page.evaluate(()=>(window as any).__remoteCreates)).toBe(0);
+  expect((await calls(page)).map((c:any)=>c.method)).not.toContain("notion_create_database");
+  await expect(page.getByRole("switch",{name:"Automatically publish finished notes"})).toHaveAttribute("aria-checked","false");
+});
+test("failed ready database finishing preserves the warning and safe retry",async({page})=>{
+  await fixture(page,{readyWarning:true,finishFails:true});
+  await page.getByRole("button",{name:"Finish database setup",exact:true}).click();
+  await expect(page.getByRole("alert").filter({hasText:"Database setup could not be finished"})).toBeVisible();
+  await expect(page.getByRole("status").filter({hasText:"date sort could not be applied"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Finish database setup",exact:true})).toBeEnabled();
+  await page.getByRole("button",{name:"Finish database setup",exact:true}).click();
+  await expect.poll(async ()=>(await calls(page)).filter((c:any)=>c.method==="notion_finish_database").length).toBe(2);
+  expect(await page.evaluate(()=>(window as any).__remoteCreates)).toBe(0);
+  expect((await calls(page)).map((c:any)=>c.method)).not.toContain("notion_create_database");
+  const requests=(await calls(page)).filter((c:any)=>c.method==="notion_finish_database");expect(requests.every((c:any)=>c.params.parent==="parent-page")).toBe(true);
+  await expect(page.getByRole("switch",{name:"Automatically publish finished notes"})).toHaveAttribute("aria-checked","false");
 });
 test("changing to an unreadable database never retains the previous schema mappings",async({page})=>{
   await fixture(page);await page.getByText("Use an existing database",{exact:true}).click();await page.getByRole("button",{name:"Find",exact:true}).click();await page.getByRole("button",{name:"Existing team meetings",exact:true}).click();

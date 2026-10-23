@@ -568,6 +568,9 @@ impl PublicationPort for NotionPublisher {
     fn provision(&self, parent: &str, allow_create: bool) -> Result<Value> {
         self.template_provision(parent, allow_create)
     }
+    fn finish_provision(&self, parent: &str) -> Result<Value> {
+        self.template_finish_provision(parent)
+    }
     fn destinations(&self, query: &str) -> Result<Value> {
         if query.chars().count() > 200 {
             return Err(error("Keep the Notion search under 200 characters."));

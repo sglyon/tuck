@@ -60,6 +60,12 @@ pub trait PublicationPort: Send + Sync {
             "This publisher cannot create a meeting database.",
         ))
     }
+    /// Explicitly finish the view of an existing template; never create a database.
+    fn finish_provision(&self, _parent: &str) -> Result<Value> {
+        Err(AppError::unavailable(
+            "This publisher cannot finish database setup.",
+        ))
+    }
     /// Read-only verification of a page copied by the user after an uncertain
     /// initial publication. Implementations must check destination and ownership.
     fn recover(&self, _target: &str, _meeting: &Value, _url: &str) -> Result<String> {

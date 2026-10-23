@@ -221,6 +221,21 @@ struct Publisher {
     provisioned: Mutex<Vec<(String, bool)>>,
     provision_outcomes: Mutex<Vec<Result<Value>>>,
     provision_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    finished: Mutex<Vec<String>>,
+    finish_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+}
+impl Publisher {
+    fn provision_result(&self) -> Result<Value> {
+        let mut outcomes = self.provision_outcomes.lock().unwrap();
+        if !outcomes.is_empty() {
+            return outcomes.remove(0);
+        }
+        Ok(json!({
+            "id":"00000000-0000-4000-8000-000000000002",
+            "title":"Meeting notes", "url":"https://www.notion.so/00000000000040008000000000000002",
+            "mapping":{"date":"Date","folder":"Folder","tags":"Tags","people":"People","meetingId":"Tuck meeting ID"}
+        }))
+    }
 }
 impl PublicationPort for Publisher {
     fn provision(&self, parent: &str, allow_create: bool) -> Result<Value> {
@@ -231,15 +246,14 @@ impl PublicationPort for Publisher {
         if let Some(hook) = self.provision_hook.lock().unwrap().as_ref() {
             hook();
         }
-        let mut outcomes = self.provision_outcomes.lock().unwrap();
-        if !outcomes.is_empty() {
-            return outcomes.remove(0);
+        self.provision_result()
+    }
+    fn finish_provision(&self, parent: &str) -> Result<Value> {
+        self.finished.lock().unwrap().push(parent.into());
+        if let Some(hook) = self.finish_hook.lock().unwrap().as_ref() {
+            hook();
         }
-        Ok(json!({
-            "id":"00000000-0000-4000-8000-000000000002",
-            "title":"Meeting notes", "url":"https://www.notion.so/00000000000040008000000000000002",
-            "mapping":{"date":"Date","folder":"Folder","tags":"Tags","people":"People","meetingId":"Tuck meeting ID"}
-        }))
+        self.provision_result()
     }
     fn recover(&self, target: &str, meeting: &Value, address: &str) -> Result<String> {
         self.recoveries
