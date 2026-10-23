@@ -8,7 +8,7 @@ Automatic prompts are limited to 12,000 UTF-8 bytes including the system prompt 
 
 Background HTTP requests have a 20-second timeout and a 64-KiB raw response bound. Completed answer text is limited to 3,000 characters. Existing local NDJSON and hosted SSE parsers require a completed response; partial, malformed and oversized answers are rejected. ChatGPT authentication can separately refresh with its existing 30-second timeout before the 20-second model request, so 20 seconds is not an end-to-end shutdown guarantee. An already-sent request cannot be unsent: disabling, pausing, stopping or changing the destination invalidates its output and prevents later checks.
 
-Shutdown invalidates service consent before joining the worker and wakes idle waits immediately. This is integrated into quit, explicit shutdown and runtime Drop. The service never restores enabled state from storage.
+Shutdown invalidates service consent and stops/drains hardware capture before joining an outstanding AI request. Idle worker waits wake immediately. This is integrated into quit, explicit shutdown and runtime Drop. The service never restores enabled state from storage.
 
 Initial verification: native adapter tests exercise real loopback HTTP with synthetic text, smaller generation budgets, absent tools, incomplete/oversized responses, UTF-8 input rejection before credentials/network, and serialization/manual priority. Four worker tests cover inert composition, idempotent start, wakeable shutdown, weak ownership and in-flight invalidation. Full native regression at this point passed 116 library tests (two explicitly provisioned fixture tests ignored) and two desktop lifecycle tests; strict all-target Clippy passed.
 

@@ -11,6 +11,9 @@ use tuck_core::{ports::Result, AppError, MeetingService};
 
 const TICK: Duration = Duration::from_secs(5);
 
+#[cfg(test)]
+mod acceptance;
+
 trait Application: Send + Sync {
     fn tick(&self) -> Result<()>;
     fn stop(&self) -> Result<()>;

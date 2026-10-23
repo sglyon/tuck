@@ -111,11 +111,12 @@ impl DesktopRuntime {
             }
             "shutdown" | "quit_app" => {
                 let _ = self.notion_auth.cancel();
+                // Stop/drain hardware before waiting on an already-sent AI request.
+                // Core shutdown first invalidates monitoring so its late result is discarded.
+                let stopped = self.service.handle("shutdown", json!({}));
                 let coaching = self.coaching.shutdown();
                 self.reminders.shutdown();
-                let stopped = self.service.handle("shutdown", json!({}));
-                coaching?;
-                stopped
+                stopped.and_then(|value| coaching.map(|()| value))
             }
             "audio_source" => {
                 self.service.handle(method, params.clone())?;
@@ -208,9 +209,10 @@ impl DesktopRuntime {
 
 impl Drop for DesktopRuntime {
     fn drop(&mut self) {
-        // Fields otherwise drop in declaration order: retain the application
-        // while invalidating and joining any outstanding coaching completion.
+        // Close capture promptly, then retain the application while joining AI work.
+        let _ = self.service.handle("shutdown", serde_json::json!({}));
         let _ = self.coaching.shutdown();
+        self.reminders.shutdown();
     }
 }
 
