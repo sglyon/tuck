@@ -58,7 +58,7 @@ No database transaction is held during capture shutdown, inference, OAuth, or pu
 
 Portable backups take a consistent metadata/evidence snapshot, then stream owned audio through the archive adapter outside the database transaction. Restore validates the full manifest and stages audio before committing new meeting IDs; existing IDs are skipped as a unit. Audio installation follows that commit and reports partial failures truthfully. Shutdown waits on the same lifecycle guard as backup/restore. These rules do not pretend a filesystem and database share one atomic transaction.
 
-The first desktop library bootstrap returns full meeting DTOs for simplicity. Very large libraries will need paged meeting headers and on-demand transcript reads; the runtime contract explicitly documents that present limitation rather than inventing a separate read infrastructure now.
+Desktop startup returns a bounded page of meeting headers and global scalar counts/capped facets. It loads a complete meeting only when selected, with a bounded cache in the interface. Core-owned read operations project headers and page by stable keys directly in SQLite; a transactional generation invalidates stale page chains. No separate read service or write model is introduced. Full bootstrap remains a diagnostic compatibility command. A single selected meeting still loads its complete transcript. See [loading contract](library-loading-contract.md) and [verification](library-loading-verification.md).
 
 ## Replacing SQLite later
 

@@ -36,6 +36,8 @@ Recaps and personal notes are separately editable. Saved templates shape recaps;
 
 Folders, tags and people narrow the library. Search and library questions retrieve bounded matching excerpts and link back to their actual meetings. This is lexical retrieval, so specific names and phrases work best. It does not run an embedding model in the background. Closing the window saves edits and leaves Tuck available in the tray; Quit saves and shuts it down.
 
+The library loads in small pages; transcripts load when you open a conversation. Search, filters and the task inbox still cover meetings beyond the current page. [Synthetic large-library verification](docs/library-loading-verification.md) records the transfer and native memory observations separately from real-call qualification.
+
 Retained recordings can be played and sought from Transcript without loading the whole file into the interface. Transcript corrections keep the original recognized words available and guard against stale edits. Recover saved audio creates a separate linked meeting; it keeps the source meeting and recording intact.
 
 Privacy settings can save a portable ZIP backup of the library, saved writing and full note history, with optional retained audio. Restore previews the archive and imports only missing meetings. Existing meetings are skipped, credentials are excluded, and restore never enables hosted processing or automatic publishing. Backup files contain private content and are not encrypted by Tuck.

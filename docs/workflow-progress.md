@@ -14,6 +14,7 @@ This extends the competitive research in [research.md](research.md). Implemented
 | Follow-through | Per-meeting actions with owner/date/completion and a task inbox | No external task-system synchronization or automatic commitment creation |
 | Organization | Folders, tags and people scopes | People labels do not establish speaker identity |
 | Library recall | Bounded lexical evidence retrieval, cross-meeting questions, actual source links | No semantic index, persistent library conversation history or unbounded transcript context |
+| Growing library | Paged headers, global scopes/counts/tasks and on-demand meeting details | Selected meetings still load complete transcripts; literal search work grows with stored evidence |
 | Notion | Shared-destination discovery, schema-aware optional mappings, known-page updates, read-only uncertain-page recovery | Internal integration token; registered public OAuth is not configured; unknown create outcomes never trigger a blind duplicate upload |
 
 Notion updates preserve content outside marker-verified Tuck sections. A complete replacement is read back before an earlier section is retired. Reconciliation compares actual content rather than trusting a revision label. Older flat exports stay in place; the first update adds a managed section. Mock HTTP tests cover ambiguity, actual-content reuse, partial replacement, foreign sections, bounded cursors and read-only recovery. These tests do not claim a live Notion account was exercised.
@@ -24,7 +25,7 @@ The subsequent library-safety increment implements retained-audio playback, guar
 
 Broader file import is also implemented: PCM WAV, MP3, FLAC and AAC-LC stream through bounded local conversion without modifying the selected source. Codec fixtures and a public AAC-to-Parakeet integration passed. AAC edit-list trimming remains unsupported, so priming/padding is retained. See [audio import](native-audio-import.md).
 
-1. Custom vocabulary with a validated recognition path; [evaluation](vocabulary-evaluation.md) records actual backend requirements rather than presenting a no-op setting.
+1. Custom vocabulary with a validated recognition path. The [acoustic qualification](vocabulary-qualification.md) corrected names but also inserted one into ordinary speech, so it remains a developer prototype. [Backend evaluation](vocabulary-evaluation.md) records the remaining requirements.
 2. Meeting-app detection/reminders, persistent voice identity and better overlap/echo handling, each with realistic privacy and accuracy checks.
 3. Native mobile capture and device continuity; hosted synchronization/sharing require account ownership, offline conflicts and retention decisions.
 4. Optional cross-application dictation and snippets, once the primary meeting workflow is reliable.

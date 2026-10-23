@@ -2,7 +2,17 @@
 
 Verified on October 23, 2026 on a Mac18,5, Apple M6, 32 GiB RAM, macOS 27.0.1 arm64. These checks used public audio and isolated temporary libraries. No user microphone, system audio, ChatGPT account, paid inference or Notion destination was accessed.
 
-## Final packaged checkpoint
+## Paged-library package
+
+The current development bundle is **58.74 MiB (61,593,170 bytes)**, built from application source commit `43ddd455b8b2f1e7926dd108d253b6559b8c2d06`. Its main executable SHA-256 is `ec1d893b1453262cafee1c84d7697f2b78c3f4e15dba97f3cfe6d9d586765343`. Inventory confirms no Python runtime/files, speech weights or vocabulary qualification executable. The optional vocabulary experiment is developer-only and failed its false-insertion gate; [qualification](vocabulary-qualification.md) records that decision.
+
+Final checks passed: **49 core tests, 72 native library tests, two desktop lifecycle tests, seven UI unit tests and 30 browser E2Es**, plus strict core/native Clippy and production builds. Two optional native fixture tests remain ignored in the ordinary suite. The actual native composition passed 32 large-library requests and a repeated 131-request safety check using real Parakeet/public speech. Independent Impeccable review approved selected detail **32/40**, library pages **31/40** and global tasks **32/40**; see [review](library-loading-ui-review.md).
+
+The 1,000-meeting / 120,000-segment diagnostic fixture transferred 27,555 bytes at lean startup versus 76,224,483 bytes through the same binary's full compatibility bootstrap. Rust RSS sampled after each fresh process's response was about 24.1 versus 363.0 MiB. These are diagnostic observations excluding WebKit, speech models, local AI and a video call, not minimum-spec qualification. [Loading verification](library-loading-verification.md) contains the exact evidence and limits.
+
+The final bundle was built again after the compact retry and failed-query recovery fixes. An attempted native-window check reported the desktop locked, so no new WKWebView interaction is claimed for this package. The previous package's actual playback/menu/save acceptance below remains separate evidence; native media adapters are unchanged. `benchmarks/native-workflow/final-package.json` records both executable identities rather than attributing the earlier check to the new build. Real capture/account checks, signing and the 16 GB real-call target remain outstanding.
+
+## Prior workflow package checkpoint
 
 The current development bundle is **58.62 MiB (61,471,150 bytes)** at `src-tauri/target/release/bundle/macos/Tuck.app`. Its main executable SHA-256 is `b4af4ebc3fbf5d4f4bbbcb64baeee1f90fc2724f2649023e3f93b79286004932`. It contains the audio, calendar and Core ML speech helpers, the Symphonia MPL-2.0 notice, and zero Python files/interpreters. Speech weights remain separate explicit downloads. The earlier package sizes and test counts below are historical checkpoints.
 

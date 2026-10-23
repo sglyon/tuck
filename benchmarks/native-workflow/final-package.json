@@ -1,32 +1,48 @@
 {
+  "verifiedAt": "2026-10-23T15:45:38.191466+00:00",
+  "sourceCommit": "43ddd455b8b2f1e7926dd108d253b6559b8c2d06",
   "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
-  "bundleBytes": 61471150,
-  "mainExecutableSha256": "b4af4ebc3fbf5d4f4bbbcb64baeee1f90fc2724f2649023e3f93b79286004932",
+  "bundleBytes": 61593170,
+  "mainExecutableSha256": "ec1d893b1453262cafee1c84d7697f2b78c3f4e15dba97f3cfe6d9d586765343",
   "pythonFiles": [],
+  "bundledModelOrQualificationFiles": [],
   "licensePresent": true,
-  "coreTestsPassed": 44,
+  "coreTestsPassed": 49,
   "nativeLibraryTestsPassed": 72,
   "nativeLibraryTestsIgnored": 2,
   "desktopLifecycleTestsPassed": 2,
-  "uiUnitTestsPassed": 6,
-  "uiE2ETestsPassed": 23,
-  "finalNativePlaybackVerified": true,
+  "uiUnitTestsPassed": 7,
+  "uiE2ETestsPassed": 30,
+  "impeccableScores": {
+    "detailLoading": 32,
+    "libraryPages": 31,
+    "globalTasks": 32
+  },
+  "nativeLibraryIntegrationRequests": 32,
+  "nativeSafetyIntegrationRequests": 131,
+  "finalNativePlaybackVerified": false,
+  "latestNativeWindowCheck": "Desktop locked; no native window verification claimed for this package.",
+  "previousNativeAcceptance": {
+    "mainExecutableSha256": "b4af4ebc3fbf5d4f4bbbcb64baeee1f90fc2724f2649023e3f93b79286004932",
+    "verifiedAt": "2026-10-23T14:25:44.851355+00:00",
+    "checks": [
+      "final bundle relaunched; neutral recap footer visible",
+      "public retained audio loaded paused with real duration",
+      "native playback advanced to end",
+      "paused seek and resume advanced from selected position",
+      "File Record a meeting routes unprepared setup without recording",
+      "Privacy backup and restore entry points visible",
+      "verification note saved across immediate window hide and reopen"
+    ],
+    "limits": [
+      "no audible output assertion",
+      "no microphone or system capture",
+      "no external account or calendar access",
+      "no long-file playback qualification",
+      "OS global shortcut not hardware-qualified"
+    ]
+  },
+  "nativeMediaAdaptersUnchangedSincePreviousAcceptance": true,
   "minimum16GBRealCallQualified": false,
-  "nativeAcceptanceVerifiedAt": "2026-10-23T14:25:44.851355+00:00",
-  "nativeAcceptanceChecks": [
-    "final bundle relaunched; neutral recap footer visible",
-    "public retained audio loaded paused with real duration",
-    "native playback advanced to end",
-    "paused seek and resume advanced from selected position",
-    "File Record a meeting routes unprepared setup without recording",
-    "Privacy backup and restore entry points visible",
-    "verification note saved across immediate window hide and reopen"
-  ],
-  "nativeAcceptanceLimits": [
-    "no audible output assertion",
-    "no microphone or system capture",
-    "no external account or calendar access",
-    "no long-file playback qualification",
-    "OS global shortcut not hardware-qualified"
-  ]
+  "distribution": "Unsigned development app"
 }
