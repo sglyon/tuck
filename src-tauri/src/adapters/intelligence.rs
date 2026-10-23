@@ -2,8 +2,11 @@ use super::chatgpt::{http_client, ChatGptAuth, RESOURCE};
 use reqwest::blocking::{Client, Response};
 use serde_json::{json, Value};
 use std::{
-    io::{BufRead, BufReader},
-    sync::Arc,
+    io::{BufRead, BufReader, Cursor, Read},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
     time::Duration,
 };
 use tuck_core::{
@@ -16,6 +19,87 @@ pub struct Intelligence {
     auth: Arc<ChatGptAuth>,
     secrets: Arc<dyn SecretPort>,
     client: Client,
+    inference: InferenceGate,
+}
+// One model request at a time. A background check never queues behind manual work.
+#[derive(Default)]
+struct InferenceGate {
+    active: Mutex<()>,
+    manual_waiting: AtomicUsize,
+}
+impl InferenceGate {
+    fn enter(&self, coach: bool) -> Result<MutexGuard<'_, ()>> {
+        if coach {
+            let busy = || {
+                AppError::new(
+                    "intelligence_busy",
+                    "Waiting for your AI request to finish.",
+                )
+            };
+            if self.manual_waiting.load(Ordering::SeqCst) != 0 {
+                return Err(busy());
+            }
+            let guard = self.active.try_lock().map_err(|_| busy())?;
+            if self.manual_waiting.load(Ordering::SeqCst) != 0 {
+                return Err(busy());
+            }
+            Ok(guard)
+        } else {
+            self.manual_waiting.fetch_add(1, Ordering::SeqCst);
+            let guard = self.active.lock();
+            self.manual_waiting.fetch_sub(1, Ordering::SeqCst);
+            guard.map_err(|_| {
+                error("The AI request worker is unavailable. Restart Tuck to try again.")
+            })
+        }
+    }
+}
+const COACH_INPUT_BYTES: usize = 12_000;
+const COACH_RESPONSE_BYTES: u64 = 65_536;
+const COACH_OUTPUT_CHARS: usize = 3_000;
+const COACH_TIMEOUT: Duration = Duration::from_secs(20);
+fn coach_response(response: Response, local: bool) -> Result<String> {
+    let mut bytes = Vec::new();
+    checked(response)?
+        .take(COACH_RESPONSE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| {
+            error(
+                "The agent check was interrupted. Recording continues; Tuck will try again later.",
+            )
+        })?;
+    if bytes.len() as u64 > COACH_RESPONSE_BYTES {
+        return Err(error(
+            "The agent provider returned too much data. Try a smaller model response.",
+        ));
+    }
+    let answer = if local {
+        consume_local(Cursor::new(bytes), &mut |_| {})?
+    } else {
+        consume_sse(Cursor::new(bytes), &mut |_| {})?
+    };
+    if answer.chars().count() > COACH_OUTPUT_CHARS {
+        return Err(error(
+            "The agent response was too long. Tuck will check again later.",
+        ));
+    }
+    Ok(answer)
+}
+fn hosted_body(
+    model: &str,
+    system: &str,
+    messages: &[Value],
+    web_search: bool,
+    coach: bool,
+) -> Value {
+    let mut body =
+        json!({"model":model,"instructions":system,"input":messages,"store":false,"stream":true});
+    if coach {
+        body["max_output_tokens"] = json!(1200);
+    } else if web_search {
+        body["tools"] = json!([{"type":"web_search"}]);
+    }
+    body
 }
 fn error(message: &str) -> AppError {
     AppError::new("intelligence_error", message)
@@ -288,6 +372,7 @@ impl Intelligence {
             auth,
             secrets,
             client: http_client(Duration::from_secs(180))?,
+            inference: InferenceGate::default(),
         })
     }
 }
@@ -368,6 +453,31 @@ impl IntelligencePort for Intelligence {
         messages: &[Value],
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String> {
+        self.complete_with_policy(settings, system, messages, on_delta, false)
+    }
+    fn complete_coach(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
+        self.complete_with_policy(settings, system, messages, &mut |_| {}, true)
+    }
+}
+impl Intelligence {
+    fn complete_with_policy(
+        &self,
+        settings: &Value,
+        system: &str,
+        messages: &[Value],
+        on_delta: &mut dyn FnMut(&str),
+        coach: bool,
+    ) -> Result<String> {
+        let _request = self.inference.enter(coach)?;
+        if coach
+            && system.len()
+                + serde_json::to_vec(messages)
+                    .map_err(|_| error("Invalid agent context."))?
+                    .len()
+                > COACH_INPUT_BYTES
+        {
+            return Err(error("The selected agent instructions are too long. Shorten them or choose fewer agents."));
+        }
         let provider = settings["provider"].as_str().unwrap_or("local");
         let model = settings["model"].as_str().unwrap_or("").trim();
         if model.is_empty() {
@@ -385,7 +495,7 @@ impl IntelligencePort for Intelligence {
             return Err(error("Enter a question first."));
         }
         if provider == "local" {
-            if settings["webSearch"] == true {
+            if !coach && settings["webSearch"] == true {
                 return Err(error(
                     "Web lookup needs a hosted AI provider. Turn it off to use local AI.",
                 ));
@@ -399,7 +509,7 @@ impl IntelligencePort for Intelligence {
             history.extend(messages);
             // Leave CPU headroom for speech processing and an active video call.
             // Model size/GPU memory remain the user's selected model's responsibility.
-            let body = json!({"model":model,"messages":history,"stream":true,"think":false,"keep_alive":"2m","options":{"num_ctx":16384,"num_thread":2,"num_predict":4096}});
+            let body = json!({"model":model,"messages":history,"stream":true,"think":false,"keep_alive":"2m","options":{"num_ctx":16384,"num_thread":2,"num_predict":if coach {1200} else {4096}}});
             let response = self
                 .client
                 .post(
@@ -407,6 +517,11 @@ impl IntelligencePort for Intelligence {
                         .join("api/chat")
                         .map_err(|_| error("Invalid local AI endpoint."))?,
                 )
+                .timeout(if coach {
+                    COACH_TIMEOUT
+                } else {
+                    Duration::from_secs(180)
+                })
                 .json(&body)
                 .send()
                 .map_err(|_| {
@@ -415,7 +530,11 @@ impl IntelligencePort for Intelligence {
             if response.status().as_u16() == 404 {
                 return Err(error("This local model is not installed. Install it in Ollama, then load models in Settings."));
             }
-            return consume_local(BufReader::new(checked(response)?), on_delta);
+            return if coach {
+                coach_response(response, true)
+            } else {
+                consume_local(BufReader::new(checked(response)?), on_delta)
+            };
         }
         if !matches!(provider, "chatgpt" | "openai") {
             return Err(error("Choose a supported AI provider in Settings."));
@@ -432,20 +551,32 @@ impl IntelligencePort for Intelligence {
                 .get("openai")?
                 .ok_or_else(|| error("Add your OpenAI API key in Settings first."))?
         };
-        let mut body = json!({"model":model,"instructions":system,"input":messages,"store":false,"stream":true});
-        if settings["webSearch"] == true {
-            body["tools"] = json!([{"type":"web_search"}]);
-        }
+        let body = hosted_body(
+            model,
+            system,
+            &messages,
+            !coach && settings["webSearch"] == true,
+            coach,
+        );
         let response = self
             .client
             .post(format!("{RESOURCE}/responses"))
             .bearer_auth(token)
+            .timeout(if coach {
+                COACH_TIMEOUT
+            } else {
+                Duration::from_secs(180)
+            })
             .json(&body)
             .send()
             .map_err(|_| {
                 error("The AI connection was interrupted. Your transcript is saved; try again.")
             })?;
-        consume_sse(BufReader::new(checked(response)?), on_delta)
+        if coach {
+            coach_response(response, false)
+        } else {
+            consume_sse(BufReader::new(checked(response)?), on_delta)
+        }
     }
 }
 #[cfg(test)]
@@ -649,5 +780,140 @@ mod review_tests {
         assert_eq!(payload["options"]["num_ctx"], 16384);
         assert_eq!(payload["think"], false);
         assert_eq!(payload["keep_alive"], "2m");
+    }
+}
+
+#[cfg(test)]
+mod coach_tests {
+    use super::*;
+    use std::{sync::mpsc, thread, time::Instant};
+
+    struct NoSecrets;
+    impl SecretPort for NoSecrets {
+        fn get(&self, _: &str) -> Result<Option<String>> {
+            panic!("Local/background budget rejection must not read hosted secrets")
+        }
+        fn set(&self, _: &str, _: &str) -> Result<()> {
+            unreachable!()
+        }
+        fn delete(&self, _: &str) -> Result<()> {
+            unreachable!()
+        }
+    }
+    fn adapter(path: &std::path::Path) -> Intelligence {
+        let secrets: Arc<dyn SecretPort> = Arc::new(NoSecrets);
+        Intelligence::new(
+            Arc::new(ChatGptAuth::new(path, secrets.clone()).unwrap()),
+            secrets,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn background_cannot_enable_tools_or_provider_storage() {
+        let body = hosted_body(
+            "selected-model",
+            "Evidence policy",
+            &[json!({"role":"user","content":"Recent speech"})],
+            true,
+            true,
+        );
+        assert_eq!(body["model"], "selected-model");
+        assert_eq!(body["store"], false);
+        assert_eq!(body["max_output_tokens"], 1200);
+        assert!(body.get("tools").is_none());
+        let manual = hosted_body("selected-model", "Context", &[], true, false);
+        assert_eq!(manual["tools"][0]["type"], "web_search");
+        assert!(manual.get("max_output_tokens").is_none());
+    }
+    #[test]
+    fn background_skips_when_manual_is_active_or_waiting_and_never_overlaps() {
+        let gate = Arc::new(InferenceGate::default());
+        let held = gate.enter(true).unwrap();
+        assert_eq!(gate.enter(true).unwrap_err().code, "intelligence_busy");
+        let (send, recv) = mpsc::channel();
+        let other = gate.clone();
+        let waiter = thread::spawn(move || {
+            let _guard = other.enter(false).unwrap();
+            send.send(()).unwrap();
+        });
+        let until = Instant::now() + Duration::from_secs(2);
+        while gate.manual_waiting.load(Ordering::SeqCst) == 0 && Instant::now() < until {
+            thread::yield_now();
+        }
+        assert_eq!(gate.manual_waiting.load(Ordering::SeqCst), 1);
+        assert_eq!(gate.enter(true).unwrap_err().code, "intelligence_busy");
+        drop(held);
+        recv.recv_timeout(Duration::from_secs(2)).unwrap();
+        waiter.join().unwrap();
+        let manual = gate.enter(false).unwrap();
+        assert_eq!(gate.enter(true).unwrap_err().code, "intelligence_busy");
+        drop(manual);
+        assert!(gate.enter(true).is_ok());
+    }
+    #[test]
+    fn encoded_unicode_budget_rejects_before_credentials_or_network() {
+        let data = tempfile::tempdir().unwrap();
+        let adapter = adapter(data.path());
+        let result = adapter.complete_coach(
+            &json!({"provider":"openai","model":"selected","hostedConsent":true}),
+            "Policy",
+            &[json!({"role":"user","content":"語".repeat(5000)})],
+        );
+        assert!(result.unwrap_err().message.contains("too long"));
+    }
+    #[test]
+    fn local_background_has_smaller_output_budget_and_complete_bounded_transport() {
+        let cases = vec![
+            (
+                "{\"message\":{\"content\":\"null\"},\"done\":true}\n".to_owned(),
+                true,
+            ),
+            (
+                "{\"message\":{\"content\":\"null\"},\"done\":false}\n".to_owned(),
+                false,
+            ),
+            (
+                format!(
+                    "{{\"message\":{{\"content\":\"{}\"}},\"done\":true}}\n",
+                    "x".repeat(3001)
+                ),
+                false,
+            ),
+            (" ".repeat(COACH_RESPONSE_BYTES as usize + 1), false),
+        ];
+        for (response, success) in cases {
+            let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}", server.server_addr().to_ip().unwrap());
+            let worker = thread::spawn(move || {
+                let mut request = server
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(request.url(), "/api/chat");
+                let mut raw = String::new();
+                request.as_reader().read_to_string(&mut raw).unwrap();
+                let payload: Value = serde_json::from_str(&raw).unwrap();
+                request
+                    .respond(tiny_http::Response::from_string(response))
+                    .unwrap();
+                payload
+            });
+            let data = tempfile::tempdir().unwrap();
+            let result = adapter(data.path()).complete_coach(
+                &json!({"provider":"local","model":"fixture","localUrl":endpoint,"webSearch":true}),
+                "Policy",
+                &[json!({"role":"user","content":"Recent speech"})],
+            );
+            assert_eq!(result.is_ok(), success, "{result:?}");
+            if success {
+                assert_eq!(result.unwrap(), "null");
+            }
+            let body = worker.join().unwrap();
+            assert_eq!(body["options"]["num_predict"], 1200);
+            assert_eq!(body["options"]["num_thread"], 2);
+            assert_eq!(body["options"]["num_ctx"], 16384);
+            assert_eq!(body["think"], false);
+            assert!(body.get("tools").is_none());
+        }
     }
 }

@@ -229,6 +229,9 @@ fn main() {
                 if let Err(error) = runtime.start_reminders(notifications) {
                     eprintln!("Tuck meeting reminders unavailable: {}", error.message);
                 }
+                if let Err(error) = runtime.start_coaching() {
+                    eprintln!("Tuck live coach unavailable: {}", error.message);
+                }
             }
             Ok(())
         })

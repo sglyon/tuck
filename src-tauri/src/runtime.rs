@@ -21,9 +21,14 @@ pub struct DesktopRuntime {
     pub archive: Arc<LocalArchive>,
     shortcut: Mutex<serde_json::Value>,
     reminders: crate::reminders::ReminderWorker,
+    coaching: crate::coaching::CoachWorker,
     notion_auth: Arc<NotionAuth>,
 }
 impl DesktopRuntime {
+    /// Explicit host activation; diagnostic composition remains inert.
+    pub fn start_coaching(&self) -> Result<()> {
+        self.coaching.start(self.service.clone())
+    }
     fn reset_notion_destination(&self) -> Result<()> {
         self.service.reset_notion_destination()
     }
@@ -106,8 +111,11 @@ impl DesktopRuntime {
             }
             "shutdown" | "quit_app" => {
                 let _ = self.notion_auth.cancel();
+                let coaching = self.coaching.shutdown();
                 self.reminders.shutdown();
-                self.service.handle("shutdown", json!({}))
+                let stopped = self.service.handle("shutdown", json!({}));
+                coaching?;
+                stopped
             }
             "audio_source" => {
                 self.service.handle(method, params.clone())?;
@@ -198,6 +206,14 @@ impl DesktopRuntime {
     }
 }
 
+impl Drop for DesktopRuntime {
+    fn drop(&mut self) {
+        // Fields otherwise drop in declaration order: retain the application
+        // while invalidating and joining any outstanding coaching completion.
+        let _ = self.coaching.shutdown();
+    }
+}
+
 pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopRuntime>> {
     fs::create_dir_all(data)
         .map_err(|_| AppError::unavailable("Tuck could not create its local library."))?;
@@ -266,6 +282,7 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
             serde_json::json!({"recordingShortcut":"CommandOrControl+Shift+R","recordingShortcutAvailable":false,"message":null,"lastIntent":null}),
         ),
         reminders: crate::reminders::ReminderWorker::default(),
+        coaching: crate::coaching::CoachWorker::default(),
         notion_auth,
     }))
 }
