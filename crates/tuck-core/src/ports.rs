@@ -38,6 +38,19 @@ pub trait RecordingPort: Send + Sync {
     ) -> Result<f64>;
 }
 pub trait IntelligencePort: Send + Sync {
+    /// Background-only completion. Adapters must cap context/output/latency and disable tools.
+    /// Fail closed unless the host implements the low-resource policy explicitly.
+    fn complete_coach(
+        &self,
+        _settings: &Value,
+        _system: &str,
+        _messages: &[Value],
+    ) -> Result<String> {
+        Err(AppError::unavailable(
+            "Live help is unavailable with this AI provider.",
+        ))
+    }
+
     fn models(&self, settings: &Value) -> Result<Vec<Value>>;
     fn complete(
         &self,
@@ -145,6 +158,8 @@ pub trait Repository {
     fn append(&mut self, segment: &TranscriptSegment) -> Result<bool>;
     fn segments(&mut self, id: &str) -> Result<Vec<Value>>;
     fn raw_segments(&mut self, id: &str) -> Result<Vec<Value>>;
+    /// Latest effective evidence in chronological order, bounded before hydration (maximum64).
+    fn recent_segments(&mut self, id: &str, limit: usize) -> Result<Vec<Value>>;
     fn corrections(&mut self, id: &str) -> Result<Vec<Value>>;
     /// None removes the correction; raw transcript evidence remains immutable.
     fn save_correction(

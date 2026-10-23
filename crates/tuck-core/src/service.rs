@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+mod coach;
 mod meeting_day;
 mod notion_setup;
 mod safety;
@@ -28,6 +29,7 @@ struct State {
     retain_audio: bool,
     operations: HashSet<(String, String)>,
     warnings: Vec<String>,
+    coach: coach::CoachSession,
 }
 pub struct MeetingService {
     store: Arc<dyn Store>,
@@ -205,6 +207,9 @@ impl MeetingService {
     }
     fn operation(&self, id: &str, kind: &str) -> Result<Operation<'_>> {
         let mut state = lock(&self.state)?;
+        if matches!(kind, "chat" | "summary") {
+            state.coach.generation += 1;
+        }
         if !state.operations.insert((id.into(), kind.into())) {
             return Err(AppError::invalid(format!(
                 "This meeting already has {kind} in progress."
@@ -314,6 +319,7 @@ impl MeetingService {
     fn pause_resume(&self, id: &str, resume: bool) -> Result<Value> {
         let _lifecycle = lock(&self.lifecycle)?;
         self.assert_active(id)?;
+        self.coach_capture_changed(id, false)?;
         self.transaction(|r| {
             let mut m = r.get(id)?;
             if resume {
@@ -336,6 +342,7 @@ impl MeetingService {
         self.changed(id)
     }
     fn interrupted(&self, id: &str) -> Result<()> {
+        self.coach_capture_changed(id, true)?;
         self.transaction(|r| {
             let mut m = r.get(id)?;
             m.interrupt();
@@ -385,6 +392,7 @@ impl MeetingService {
         }
     }
     pub fn stop_recording(&self, id: &str) -> Result<Value> {
+        self.coach_capture_changed(id, true)?;
         let keep;
         {
             let _lifecycle = lock(&self.lifecycle)?;
@@ -846,7 +854,32 @@ impl MeetingService {
             }
             "get_status" => self.get_status(),
             "get_settings" => self.get_settings(),
+            "set_live_coach" => self.set_live_coach(
+                string(p, "meetingId")?,
+                boolean(p, "enabled", false)?,
+                p.get("agentIds"),
+            ),
+            "get_live_coach" => self.get_live_coach(string(p, "meetingId")?),
+            "dismiss_coach_suggestion" => {
+                self.dismiss_coach_suggestion(string(p, "meetingId")?, string(p, "id")?)
+            }
+            "save_coach_follow_up" => {
+                self.save_coach_follow_up(string(p, "meetingId")?, string(p, "id")?)
+            }
             "update_settings" => {
+                let old_settings = self.transaction(|r| r.settings())?;
+                let privacy_change = ["provider", "model", "hostedConsent", "localUrl"]
+                    .iter()
+                    .any(|key| {
+                        p["changes"]
+                            .get(*key)
+                            .is_some_and(|value| value != &old_settings[*key])
+                    });
+                if privacy_change {
+                    self.stop_live_coaching()?;
+                } else {
+                    self.invalidate_live_coaching()?;
+                }
                 self.transaction(|r| {
                     let next = domain::updated_settings(&r.settings()?, &p["changes"])?;
                     r.save_settings(&next)?;
@@ -855,6 +888,9 @@ impl MeetingService {
                 self.get_settings()
             }
             "save_secret" => {
+                if p["kind"] == "openai" {
+                    self.stop_live_coaching()?;
+                }
                 let kind = string(p, "kind")?;
                 if !matches!(kind, "openai" | "notion") {
                     return Err(AppError::invalid("Choose OpenAI or Notion credentials."));
@@ -899,14 +935,21 @@ impl MeetingService {
 
             "chatgpt_accounts" => Ok(json!(self.adapters.accounts.accounts()?)),
             "chatgpt_sign_in" => {
+                self.stop_live_coaching()?;
                 let account = match p.get("accountId") {
                     None | Some(Value::Null) => None,
                     Some(v) => Some(domain::text(v, "Account ID", 128, false)?),
                 };
                 Ok(json!(self.adapters.accounts.sign_in(account)?))
             }
-            "chatgpt_select" => Ok(json!(self.adapters.accounts.select(string(p, "id")?)?)),
-            "chatgpt_sign_out" => self.adapters.accounts.sign_out(string(p, "id")?),
+            "chatgpt_select" => {
+                self.stop_live_coaching()?;
+                Ok(json!(self.adapters.accounts.select(string(p, "id")?)?))
+            }
+            "chatgpt_sign_out" => {
+                self.stop_live_coaching()?;
+                self.adapters.accounts.sign_out(string(p, "id")?)
+            }
             "list_models" => Ok(json!(self
                 .adapters
                 .intelligence
@@ -923,6 +966,7 @@ impl MeetingService {
                 )
             }
             "shutdown" => {
+                self.stop_live_coaching()?;
                 let _life = lock(&self.lifecycle)?;
                 let active = lock(&self.state)?.active.clone();
                 let mut failure = None;

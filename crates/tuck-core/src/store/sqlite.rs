@@ -272,6 +272,22 @@ impl Repository for SqlRepository<'_> {
         }
         Ok(result)
     }
+    fn recent_segments(&mut self, id: &str, limit: usize) -> Result<Vec<Value>> {
+        let mut statement = self.db.prepare("SELECT s.document,c.document FROM segments s LEFT JOIN transcript_corrections c ON c.meeting_id=s.meeting_id AND c.segment_id=s.id WHERE s.meeting_id=? ORDER BY s.start DESC,s.id DESC LIMIT ?").map_err(storage)?;
+        let rows = statement
+            .query_map(params![id, limit.min(64) as i64], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+            })
+            .map_err(storage)?;
+        let mut result = Vec::new();
+        for row in rows {
+            let (raw, correction) = row.map_err(storage)?;
+            let c: Option<Value> = correction.map(|s| decode(&s)).transpose()?;
+            result.push(crate::domain::corrected_segment(decode(&raw)?, c.as_ref()));
+        }
+        result.reverse();
+        Ok(result)
+    }
     fn corrections(&mut self, id: &str) -> Result<Vec<Value>> {
         self.documents(
             "SELECT document FROM transcript_corrections WHERE meeting_id=? ORDER BY segment_id",

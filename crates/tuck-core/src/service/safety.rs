@@ -126,6 +126,49 @@ fn validate_manifest(value: &Value) -> Result<Manifest> {
             .iter()
             .filter_map(|s| s["id"].as_str())
             .collect();
+        if m.coach_suggestions.len() > 24 {
+            return Err(invalid_backup());
+        }
+        let mut hint_ids = HashSet::new();
+        for hint in &m.coach_suggestions {
+            record_id(&json!(hint.id))?;
+            if !hint_ids.insert(&hint.id)
+                || uuid::Uuid::parse_str(&hint.agent_id).is_err()
+                || !matches!(
+                    hint.kind.as_str(),
+                    "question" | "follow_up" | "reminder" | "insight"
+                )
+                || !matches!(hint.status.as_str(), "open" | "dismissed" | "saved")
+            {
+                return Err(invalid_backup());
+            }
+            domain::text(&json!(hint.agent_name), "Agent name", 80, false)?;
+            domain::text(&json!(hint.text), "Suggestion", 280, false)?;
+            domain::text(&json!(hint.quote), "Source quote", 240, false)?;
+            if hint.quote.chars().count() < 12 {
+                return Err(invalid_backup());
+            }
+            timestamp_valid(&json!(hint.created_at))?;
+            domain::seconds(&json!(hint.start))?;
+            let source = entry
+                .segments
+                .iter()
+                .find(|s| s["id"] == hint.segment_id)
+                .ok_or_else(invalid_backup)?;
+            if source["start"] != hint.start
+                || (hint.status == "open"
+                    && !(source["text"].as_str().unwrap_or("").contains(&hint.quote)
+                        || entry.corrections.iter().any(|c| {
+                            c["segmentId"] == hint.segment_id
+                                && c["text"].as_str().unwrap_or("").contains(&hint.quote)
+                        })))
+            {
+                return Err(invalid_backup());
+            }
+            if let Some(task_id) = &hint.task_id {
+                record_id(&json!(task_id))?;
+            }
+        }
         let mut corrected = HashSet::new();
         for c in &entry.corrections {
             let segment = domain::text(&c["segmentId"], "Segment ID", 128, false)?;
@@ -185,7 +228,7 @@ impl MeetingService {
             )?)
         };
         self.transaction(|r| {
-            let m = r.get(id)?;
+            let mut m = r.get(id)?;
             if m.active() {
                 return Err(AppError::invalid(
                     "Finish recording before correcting the transcript.",
@@ -206,8 +249,23 @@ impl MeetingService {
             if correction.is_some() || current["edited"] == true {
                 r.save_correction(id, segment, correction.as_ref())?;
             }
+            let effective = text.unwrap_or_else(|| original.as_str().unwrap_or(""));
+            let mut hints_changed = false;
+            for hint in &mut m.coach_suggestions {
+                if hint.status == "open"
+                    && hint.segment_id == segment
+                    && !effective.contains(&hint.quote)
+                {
+                    hint.status = "dismissed".into();
+                    hints_changed = true;
+                }
+            }
+            if hints_changed {
+                r.save(&mut m)?;
+            }
             Ok(Value::Null)
         })?;
+        self.coach_changed(id)?;
         self.changed(id)
     }
     fn audio_meeting(&self, id: &str) -> Result<Meeting> {

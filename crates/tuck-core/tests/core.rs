@@ -10,6 +10,8 @@ use tuck_core::{
 mod dictation;
 #[path = "core/library_loading.rs"]
 mod library_loading;
+#[path = "core/live_coach.rs"]
+mod live_coach;
 #[path = "core/meeting_day.rs"]
 mod meeting_day;
 #[path = "core/notion_setup.rs"]
@@ -181,6 +183,10 @@ struct AI {
     fail: Mutex<bool>,
 }
 impl IntelligencePort for AI {
+    fn complete_coach(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
+        self.complete(settings, system, messages, &mut |_| {})
+    }
+
     fn models(&self, _: &Value) -> Result<Vec<Value>> {
         Ok(vec![json!({"id":"local-model","name":"Local Model"})])
     }

@@ -267,6 +267,30 @@ impl Repository for Data {
             })
             .collect())
     }
+    fn recent_segments(&mut self, id: &str, limit: usize) -> Result<Vec<Value>> {
+        let mut recent: Vec<_> = self.segments.get(id).into_iter().flatten().collect();
+        recent.sort_by(|a, b| {
+            b["start"]
+                .as_f64()
+                .unwrap_or(0.)
+                .total_cmp(&a["start"].as_f64().unwrap_or(0.))
+                .then_with(|| b["id"].as_str().cmp(&a["id"].as_str()))
+        });
+        let mut result: Vec<_> = recent
+            .into_iter()
+            .take(limit.min(64))
+            .map(|s| {
+                crate::domain::corrected_segment(
+                    s.clone(),
+                    self.corrections
+                        .get(id)
+                        .and_then(|cs| cs.iter().find(|c| c["segmentId"] == s["id"])),
+                )
+            })
+            .collect();
+        result.reverse();
+        Ok(result)
+    }
     fn corrections(&mut self, id: &str) -> Result<Vec<Value>> {
         Ok(self.corrections.get(id).cloned().unwrap_or_default())
     }
