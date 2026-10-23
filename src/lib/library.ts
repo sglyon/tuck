@@ -13,6 +13,7 @@ export function meetingHeader(m: Meeting): MeetingHeader {
   const {
     id,
     title,
+    kind,
     createdAt,
     duration,
     status,
@@ -30,6 +31,7 @@ export function meetingHeader(m: Meeting): MeetingHeader {
   return {
     id,
     title,
+    kind,
     createdAt,
     duration,
     status,

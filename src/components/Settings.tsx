@@ -19,7 +19,7 @@ import {
   Unplug,
 } from "lucide-react";
 import BackupRestore from "./BackupRestore";
-import NotionDestination from "./NotionDestination";
+import NotionConnection from "./NotionConnection";
 import SavedWriting from "./SavedWriting";
 import DesktopControls from "./DesktopControls";
 import { call, native, openExternal } from "../lib/bridge";
@@ -104,11 +104,11 @@ export default function Settings({
   const [busy, setBusy] = useState<string | null>(null);
   const [openaiKey, setOpenaiKey] = useState("");
   const [notionToken, setNotionToken] = useState("");
-  const [target, setTarget] = useState(s.notionTarget);
+  const [notionSelection, setNotionSelection] = useState(s.notionContent || {recap:true, notes:true, tasks:true});
+  useEffect(() => setNotionSelection(s.notionContent || {recap:true, notes:true, tasks:true}), [s.notionContent]);
   const [localUrl, setLocalUrl] = useState(s.localUrl);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [customModel, setCustomModel] = useState(s.model);
-  useEffect(() => setTarget(s.notionTarget), [s.notionTarget]);
   useEffect(() => setLocalUrl(s.localUrl), [s.localUrl]);
   useEffect(() => setCustomModel(s.model), [s.model]);
   useEffect(() => setModels([]), [s.provider]);
@@ -727,114 +727,34 @@ export default function Settings({
               Send the recap, personal notes and tasks to a database you choose.
               Audio and the raw transcript stay on this computer.
             </p>
-            <div className="connection-steps">
+            <NotionConnection settings={s} onUpdate={onUpdate} notify={notify} />
+            <fieldset className="notion-content-options">
+              <legend>What to publish</legend>
+              <p>Choose which meeting sections to send to your selected Notion database. The selected text is stored in Notion; the sign-in relay does not receive your notes.</p>
               <div>
-                <span>1</span>
-                <div>
-                  <h3>Create a Notion integration</h3>
-                  <p>
-                    Give it access to the database where you keep meeting notes.
-                  </p>
-                  <a
-                    className="text-link"
-                    href="https://www.notion.so/profile/integrations"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void openExternal(
-                        "https://www.notion.so/profile/integrations",
-                      );
-                    }}
-                  >
-                    Open Notion integrations <ArrowUpRight size={13} />
-                  </a>
-                </div>
+                {([ ["recap", "Recap"], ["notes", "My notes"], ["tasks", "Action items"] ] as const).map(([key, label]) => (
+                  <label key={key}><input type="checkbox" checked={notionSelection[key]} disabled={!!busy} onChange={e => {
+                    const notionContent = {...notionSelection, [key]: e.target.checked};
+                    setNotionSelection(notionContent);
+                    const turnOffAutomatic = s.notionAutoSync && !Object.values(notionContent).some(Boolean);
+                    void run("settings", async () => {
+                      try { await onUpdate({notionContent, ...(turnOffAutomatic ? {notionAutoSync:false} : {})}); }
+                      catch (e) { setNotionSelection(s.notionContent || {recap:true, notes:true, tasks:true}); throw e; }
+                      if (turnOffAutomatic) notify("Automatic publishing turned off. Choose at least one section before publishing.");
+                    });
+                  }} />{label}</label>
+                ))}
               </div>
-              <div>
-                <span>2</span>
-                <div>
-                  <h3>Connect it to Tuck</h3>
-                  <label className="field-label" htmlFor="notion-token">
-                    Integration token{" "}
-                    {s.hasNotionToken && (
-                      <span className="connected-text">
-                        <Check size={12} />
-                        Saved
-                      </span>
-                    )}
-                  </label>
-                  <form
-                    className="inline-input"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void saveSecret("notion", notionToken);
-                    }}
-                  >
-                    <input
-                      id="notion-token"
-                      type="password"
-                      value={notionToken}
-                      onChange={(e) => setNotionToken(e.target.value)}
-                      placeholder={
-                        s.hasNotionToken ? "Enter a replacement token" : "ntn_…"
-                      }
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button
-                      className="button secondary"
-                      disabled={!!busy || !notionToken.trim()}
-                    >
-                      Save token
-                    </button>
-                  </form>
-                </div>
-              </div>
-              <div>
-                <span>3</span>
-                <div>
-                  <h3>Choose the destination</h3>
-                  <NotionDestination
-                    key={s.notionTarget}
-                    settings={s}
-                    onUpdate={onUpdate}
-                    notify={notify}
-                  />
-                  <label className="field-label" htmlFor="notion-target">
-                    Database URL or data source ID
-                  </label>
-                  <div className="inline-input">
-                    <input
-                      id="notion-target"
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                      placeholder="https://notion.so/your-database…"
-                      spellCheck={false}
-                    />
-                    <button
-                      className="button secondary"
-                      disabled={
-                        !!busy || !target.trim() || target === s.notionTarget
-                      }
-                      onClick={() => change({ notionTarget: target.trim() })}
-                    >
-                      Save
-                    </button>
-                  </div>
-                  <p className="hint">
-                    In Notion, open the database menu → Connections → add your
-                    integration.
-                  </p>
-                </div>
-              </div>
-            </div>
+              {s.notionContent && !Object.values(s.notionContent).some(Boolean) && <p className="hint" role="status">Choose at least one section before publishing.</p>}
+            </fieldset>
             <SettingRow
               title="Automatically publish finished notes"
-              description="After a recap is created, publish to your selected database. Use Update notes to send later changes to an existing page."
+              description="When a meeting finishes, publish the selected sections to your database. Voice notes are excluded. Use Update notes to send later changes to an existing page."
             >
               <Toggle
                 label="Automatically publish finished notes"
                 checked={s.notionAutoSync}
-                disabled={!!busy || !s.notionTarget || !s.hasNotionToken}
+                disabled={!!busy || !s.notionTarget || !s.hasNotionToken || (s.notionContent && !Object.values(s.notionContent).some(Boolean))}
                 onChange={(v) => change({ notionAutoSync: v })}
               />
             </SettingRow>

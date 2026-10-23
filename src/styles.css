@@ -4489,3 +4489,33 @@ mark {
     min-height: 38px;
   }
 }
+
+/* A voice note is a short, microphone-only document in the existing desk. */
+.dictate-action { display:flex; align-items:center; gap:8px; width:100%; min-height:36px; padding:8px 11px; margin-left:15px; width:calc(100% - 30px); border:0; background:transparent; color:var(--muted); font:inherit; font-size:13px; text-align:left; border-radius:5px; margin-top:4px; }
+.dictate-action:hover:not(:disabled) { background:var(--accent-soft); color:var(--ink); }
+.dictation-source { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
+.dictation-live { padding:16px 0; border-top:1px solid var(--line); max-width:75ch; }
+.dictation-live h3 { font-size:13px; margin:0 0 8px; }
+.dictation-live p { font-size:14px; line-height:1.85; color:var(--ink); white-space:pre-wrap; }
+.notion-account { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 0 12px; }
+.notion-account h3,.notion-target-section h3 { margin:0 0 7px; font-size:14px; }
+.notion-account p { margin:0; font-size:13px; color:var(--muted); line-height:1.65; }
+.notion-account .button { flex-shrink:0; }
+.notion-target-section { padding:20px 0; }
+.notion-advanced { margin:20px 0 24px; }
+.notion-advanced .inline-input { margin:12px 0 18px; }
+.connection-error { padding:12px 0; color:var(--red); font-size:13px; }
+@media (max-width:700px) { .notion-account { align-items:flex-start; flex-direction:column; gap:14px; } .dictation-source { max-width:170px; line-height:1.5; } }
+
+.notion-content-options { border:0; padding:20px 0; margin:0; border-top:1px solid var(--line); }
+.notion-content-options legend { font-size:14px; font-weight:600; padding:0; }
+.notion-content-options > p { color:var(--muted); font-size:13px; line-height:1.65; max-width:65ch; margin:8px 0 12px; }
+.notion-content-options > div { display:flex; flex-wrap:wrap; gap:10px 24px; }
+.notion-content-options label { display:flex; align-items:center; gap:8px; min-height:32px; font-size:13px; }
+.notion-content-options input { accent-color:var(--accent); width:16px; height:16px; }
+
+.notes-editor.dictation-editor-active { min-height:140px; height:160px; }
+
+.dictation-original { margin:0 0 20px; padding:12px 0; border-bottom:1px solid var(--line); }
+.dictation-original summary { color:var(--muted); font-size:13px; cursor:pointer; }
+.dictation-original-text { max-width:75ch; white-space:pre-wrap; font-size:14px; line-height:1.85; margin:12px 0; }

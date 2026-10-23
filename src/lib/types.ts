@@ -89,6 +89,7 @@ export interface Bookmark {
   label: string;
 }
 export interface Meeting {
+  kind?: "meeting" | "dictation";
   id: string;
   title: string;
   createdAt: string;
@@ -120,6 +121,7 @@ export interface Settings {
   webSearch: boolean;
   autoSummary: boolean;
   notionAutoSync: boolean;
+  notionContent: { recap: boolean; notes: boolean; tasks: boolean };
   notionTarget: string;
   notionPropertyMapping: Record<string, string>;
   threads: number;
@@ -200,6 +202,7 @@ export type MeetingHeader = Pick<
   Meeting,
   | "id"
   | "title"
+  | "kind"
   | "createdAt"
   | "duration"
   | "status"

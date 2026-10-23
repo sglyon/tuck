@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
   Download,
   FileAudio,
   FileText,
@@ -372,9 +373,13 @@ export default function App() {
       m.status === "paused" ||
       m.status === "processing",
   );
+  const dictation = meeting?.kind === "dictation";
   const active =
     meeting?.status === "recording" || meeting?.status === "paused";
   const recording = meeting?.status === "recording";
+  useEffect(() => {
+    if (dictation && tab !== "notes" && tab !== "transcript") setTab("notes");
+  }, [dictation, tab]);
   const elapsed = meeting ? (clockValues[meeting.id] ?? meeting.duration) : 0;
   const notify = useCallback((text: string, error = false) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -959,17 +964,61 @@ export default function App() {
     choose(prepared.id);
     setTab("notes");
   };
+  const dictationReady = async () => {
+    if (!native) {
+      notify("Open the desktop app to dictate with your local speech model.", true);
+      return false;
+    }
+    const readiness = await call<{modelReady: boolean; helperReady: boolean; microphoneAvailable: boolean}>("capture_readiness", {kind: "dictation"});
+    if (readiness.modelReady && readiness.helperReady && readiness.microphoneAvailable) return true;
+    setSettingsSection("Audio & models");
+    setView("settings");
+    setPane("document");
+    notify("Set up the local speech model and microphone to dictate. Nothing has started.");
+    return false;
+  };
+  const dictate = () => void run("dictate", async () => {
+    if (!(await flushEdits())) throw new Error("Save your pending edits before dictating.");
+    if (capture || status.activeMeetingId) throw new Error("Finish the current recording before dictating.");
+    if (!(await dictationReady())) return;
+    const draft = await call<Meeting>("create_dictation");
+    merge(draft);
+    choose(draft.id);
+    setTab("notes");
+    const started = await call<Meeting>("start_recording", {meetingId: draft.id, microphone: true, systemAudio: false});
+    merge(started);
+    setClockValues(v => ({...v, [started.id]: started.duration}));
+    await refreshStatus();
+  });
+  const originalDictation = meeting?.segments
+    .map(segment => segment.originalText ?? segment.text)
+    .filter(text => text.trim())
+    .join("\n\n") || "";
+  const copyDictation = (source: "notes" | "speech" = "notes") => {
+    if (!meeting) return;
+    const text = source === "speech" ? originalDictation : meeting.notes;
+    void run("copy-dictation", async () => {
+      if (!(await flushEdits())) throw new Error("Save your notes before copying. Choose Retry save.");
+      try { await navigator.clipboard.writeText(text); }
+      catch { throw new Error(source === "speech"
+        ? "Original speech could not be copied. Select the recognized words and copy them, or try Copy original speech again."
+        : "Text could not be copied. Select the notes and copy them, or try Copy text again."); }
+      notify(source === "speech" ? "Original speech copied." : "Text copied.");
+    });
+  };
   const start = () => {
     if (!meeting) return;
     void run("record", async () => {
+      if (!(await flushEdits())) throw new Error("Save your pending edits before recording.");
+      if (dictation && !(await dictationReady())) return;
       const m = await call<Meeting>("start_recording", {
         meetingId: meeting.id,
-        microphone,
-        systemAudio,
+        microphone: dictation ? true : microphone,
+        systemAudio: dictation ? false : systemAudio,
       });
       merge(m);
       setClockValues((v) => ({ ...v, [m.id]: m.duration }));
-      setTab("transcript");
+      setTab(dictation ? "notes" : "transcript");
       setFollowLive(true);
       await refreshStatus();
     });
@@ -977,12 +1026,15 @@ export default function App() {
   const control = (method: string) => {
     if (!meeting) return;
     void run(method, async () => {
+      if (dictation && method === "stop_recording" && !(await flushEdits()))
+        throw new Error("Save your pending edits before stopping dictation. Choose Retry save.");
       const m = await call<Meeting>(method, { meetingId: meeting.id });
       merge(m);
       await refreshStatus();
       if (method === "stop_recording") {
         setClockValues((v) => ({ ...v, [m.id]: m.duration }));
-        notify("Conversation saved on this device.");
+        if (dictation) setTab("notes");
+        notify(dictation ? "Voice note saved on this device." : "Conversation saved on this device.");
       }
     });
   };
@@ -1297,7 +1349,7 @@ export default function App() {
 
   return (
     <div
-      className={`app-shell mobile-${pane}${!assistantOpen ? " assistant-hidden" : ""}${view !== "meeting" ? " settings-active" : ""}`}
+      className={`app-shell mobile-${pane}${!assistantOpen || dictation ? " assistant-hidden" : ""}${view !== "meeting" ? " settings-active" : ""}`}
     >
       <aside className="sidebar" aria-label="Conversation library">
         <div className="sidebar-tools">
@@ -1322,6 +1374,9 @@ export default function App() {
             <span className="new-shortcut" aria-hidden="true">
               +
             </span>
+          </button>
+          <button className="dictate-action" onClick={dictate} disabled={!!busy || !!capture || !!status.activeMeetingId}>
+            <Mic size={15} /><span>Dictate a note</span>
           </button>
           <label className="library-search">
             <Search size={15} />
@@ -1561,7 +1616,7 @@ export default function App() {
             ) : (
               <span className="preview-status">Desktop interface preview</span>
             )}
-            {view === "meeting" && (
+            {view === "meeting" && !dictation && (
               <button
                 className={`icon-button ${assistantOpen ? "is-active" : ""}`}
                 aria-label={assistantOpen ? "Hide assistant" : "Show assistant"}
@@ -1746,7 +1801,7 @@ export default function App() {
                     ) : (
                       <>
                         <AudioLines size={13} />
-                        Conversation
+                        {dictation ? "Voice note" : "Conversation"}
                       </>
                     )}
                   </span>
@@ -1882,11 +1937,11 @@ export default function App() {
                     </>
                   )}
                 </div>
-                <Organization
+                {!dictation && <Organization
                   key={meeting.id}
                   meeting={meeting}
                   update={(changes) => update(meeting.id, changes)}
-                />
+                />}
                 {meeting.isExample && (
                   <div className="example-note">
                     <BookOpen size={13} />
@@ -1937,7 +1992,7 @@ export default function App() {
                   <div
                     className={`recording-toolbar${active ? " capturing" : ""}`}
                   >
-                    <div className="audio-sources">
+                    {dictation ? <span className="dictation-source"><Mic size={16} />Microphone · local transcription</span> : <div className="audio-sources">
                       <button
                         className={microphone ? "source-on" : ""}
                         aria-pressed={microphone}
@@ -1964,7 +2019,7 @@ export default function App() {
                           {systemAudio ? <Check size={10} /> : <X size={10} />}
                         </span>
                       </button>
-                    </div>
+                    </div>}
                     {active ? (
                       <div className="recording-controls">
                         <span className="recording-time">
@@ -1999,7 +2054,7 @@ export default function App() {
                           ) : (
                             <Square size={11} fill="currentColor" />
                           )}
-                          Finish
+                          {dictation ? "Stop dictation" : "Finish"}
                         </button>
                       </div>
                     ) : (
@@ -2007,7 +2062,7 @@ export default function App() {
                         className="button primary compact"
                         disabled={
                           !!busy ||
-                          (!microphone && !systemAudio) ||
+                          (!dictation && !microphone && !systemAudio) ||
                           !!capture ||
                           !!status.activeMeetingId
                         }
@@ -2074,7 +2129,7 @@ export default function App() {
                         name: "Transcript",
                         Icon: AudioLines,
                       },
-                    ].map(({ id, name, Icon }) => (
+                    ].filter(item => !dictation || item.id === "notes").map(({ id, name, Icon }) => (
                       <button
                         role="tab"
                         key={id}
@@ -2366,18 +2421,31 @@ export default function App() {
                     aria-label="My notes"
                   >
                     <div className="notes-intro">
-                      <span>A little context goes a long way.</span>
-                      <span>Only you decide what matters.</span>
+                      <span>{dictation ? (active ? "Listening through your microphone." : "Your words, ready to use.") : "A little context goes a long way."}</span>
+                      {dictation ? <button className="button secondary compact" disabled={!!busy || !!active || meeting.status === "processing" || !meeting.notes.trim()} onClick={() => copyDictation()}><Copy size={14} />Copy text</button> : <span>Only you decide what matters.</span>}
                     </div>
+                    {dictation && (active || meeting.status === "processing") && <div className="dictation-live" role="status" aria-live="polite"><h3>Recognized speech</h3>{meeting.segments.length ? <p>{meeting.segments.map(segment => segment.text).join(" ")}</p> : <p>Waiting for recognized speech…</p>}</div>}
+                    {dictation && (meeting.status === "complete" || meeting.status === "interrupted") && (
+                      <details className="dictation-original">
+                        <summary>Original speech</summary>
+                        <p className="quiet-note">The original recognized words are kept here when you edit your note.</p>
+                        {originalDictation ? (
+                          <>
+                            <p className="dictation-original-text" aria-label="Original dictated speech">{originalDictation}</p>
+                            <button className="button secondary compact" disabled={!!busy} onClick={() => copyDictation("speech")}><Copy size={14} />Copy original speech</button>
+                          </>
+                        ) : <p className="quiet-note">No recognized speech was saved.</p>}
+                      </details>
+                    )}
                     <textarea
-                      aria-label="Meeting notes"
-                      className="notes-editor"
+                      aria-label={dictation ? "Voice note text" : "Meeting notes"}
+                      className={`notes-editor${dictation && active ? " dictation-editor-active" : ""}`}
                       value={meeting.notes}
                       onChange={(e) => changeNotes(meeting.id, e.target.value)}
-                      placeholder="Capture a thought, a question, a moment worth remembering…"
+                      placeholder={dictation ? (active ? "Add a note while you speak (optional)…" : "Your dictated text will appear here. You can edit it before copying.") : "Capture a thought, a question, a moment worth remembering…"}
                       spellCheck
                     />
-                    <WritingTools
+                    {!dictation && <WritingTools
                       key={`${meeting.id}:notes`}
                       meeting={meeting}
                       target="notes"
@@ -2396,7 +2464,7 @@ export default function App() {
                       merge={merge}
                       notify={notify}
                       onTimestamp={jump}
-                    />
+                    />}
                     <div className="notes-bottom">
                       <ShieldCheck size={13} />
                       <span>Your notes are saved locally as you write.</span>
@@ -2640,7 +2708,7 @@ export default function App() {
           </>
         )}
       </main>
-      {view === "meeting" && assistantOpen && (
+      {view === "meeting" && assistantOpen && !dictation && (
         <aside className="assistant-pane" aria-label="Meeting assistant">
           <header className="assistant-heading">
             <div>
@@ -2860,7 +2928,7 @@ export default function App() {
           <FileText size={18} />
           {view === "settings" ? "Settings" : "Conversation"}
         </button>
-        <button
+        {!dictation && <button
           aria-current={pane === "assistant" ? "page" : undefined}
           onClick={() => {
             setView("meeting");
@@ -2870,7 +2938,7 @@ export default function App() {
         >
           <Sparkles size={18} />
           Ask Tuck
-        </button>
+        </button>}
       </nav>
       {toast && (
         <div

@@ -20,6 +20,7 @@ export const defaults: Settings = {
   webSearch: false,
   autoSummary: false,
   notionAutoSync: false,
+  notionContent: { recap: true, notes: true, tasks: true },
   notionTarget: "",
   notionPropertyMapping: {},
   threads: 2,
