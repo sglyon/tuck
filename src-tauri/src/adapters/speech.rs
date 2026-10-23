@@ -216,8 +216,25 @@ pub struct SpeechRuntime {
     extractor: Option<SpeakerEmbeddingExtractor>,
     clusters: SpeakerClusters,
 }
+fn load_speaker_extractor(
+    models: &ModelManager,
+    enabled: bool,
+) -> Result<Option<SpeakerEmbeddingExtractor>> {
+    if !enabled || !models.installed("speakers") {
+        return Ok(None);
+    }
+    models.verify_speaker()?;
+    let config = SpeakerEmbeddingExtractorConfig {
+        model: Some(models.speaker_path().to_string_lossy().into_owned()),
+        ..Default::default()
+    };
+    Ok(Some(
+        SpeakerEmbeddingExtractor::create(&config)
+            .ok_or_else(|| error("The speaker model could not load. Reinstall it in Settings."))?,
+    ))
+}
 impl SpeechRuntime {
-    pub fn load(models: &ModelManager, threads: u32) -> Result<Self> {
+    pub fn load(models: &ModelManager, threads: u32, diarization: bool) -> Result<Self> {
         let recognizer = match models.verify()? {
             BackendModels::Apple(path) => Recognizer::Apple(AppleRecognizer::load(&path)?),
             BackendModels::Cpu(path) => {
@@ -245,18 +262,7 @@ impl SpeechRuntime {
                 })?)
             }
         };
-        let extractor = if models.installed("speakers") {
-            models.verify_speaker()?;
-            let config = SpeakerEmbeddingExtractorConfig {
-                model: Some(models.speaker_path().to_string_lossy().into_owned()),
-                ..Default::default()
-            };
-            Some(SpeakerEmbeddingExtractor::create(&config).ok_or_else(|| {
-                error("The speaker model could not load. Reinstall it in Settings.")
-            })?)
-        } else {
-            None
-        };
+        let extractor = load_speaker_extractor(models, diarization)?;
         Ok(Self {
             recognizer,
             extractor,
@@ -472,6 +478,21 @@ impl PcmResampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disabled_speaker_recognition_does_not_verify_or_load_an_installed_model() {
+        let root = tempfile::tempdir().unwrap();
+        let models = ModelManager::new(root.path(), std::sync::Arc::new(|_, _| {}));
+        let path = models.speaker_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // An installed-size corrupt model would normally fail integrity checks.
+        std::fs::File::create(path)
+            .unwrap()
+            .set_len(29_596_978)
+            .unwrap();
+        assert!(models.installed("speakers"));
+        assert!(load_speaker_extractor(&models, false).unwrap().is_none());
+        assert!(load_speaker_extractor(&models, true).is_err());
+    }
     #[cfg(unix)]
     #[test]
     fn model_aliases_use_the_same_physical_directory() {

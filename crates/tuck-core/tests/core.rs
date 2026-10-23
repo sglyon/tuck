@@ -6,6 +6,8 @@ use tuck_core::{
     store::{memory::MemoryStore, sqlite::SqliteStore},
     Adapters, AppError, MeetingService,
 };
+#[path = "core/dictation.rs"]
+mod dictation;
 #[path = "core/library_loading.rs"]
 mod library_loading;
 #[path = "core/meeting_day.rs"]
@@ -92,6 +94,7 @@ struct Capture {
     id: Mutex<String>,
     fail_start: Mutex<bool>,
     configured: Mutex<Option<Value>>,
+    sources: Mutex<Option<(bool, bool)>>,
     fail_configure: Mutex<bool>,
     partial_start: Mutex<bool>,
     fail_stop: Mutex<bool>,
@@ -110,7 +113,16 @@ impl RecordingPort for Capture {
     fn status(&self) -> Value {
         json!({"captureAvailable":true,"modelInstalled":true})
     }
-    fn start(&self, id: &str, on: OnSegment, _: bool, _: bool, _: u32, _: bool) -> Result<()> {
+    fn start(
+        &self,
+        id: &str,
+        on: OnSegment,
+        system: bool,
+        microphone: bool,
+        _: u32,
+        _: bool,
+    ) -> Result<()> {
+        *self.sources.lock().unwrap() = Some((system, microphone));
         *self.id.lock().unwrap() = id.into();
         *self.callback.lock().unwrap() = Some(on.clone());
         if *self.partial_start.lock().unwrap() {

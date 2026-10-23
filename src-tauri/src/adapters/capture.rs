@@ -764,6 +764,7 @@ struct DeviceSelection {
 }
 pub struct CaptureEngine {
     devices: Mutex<DeviceSelection>,
+    diarization: Mutex<bool>,
     data_dir: PathBuf,
     _resources_dir: PathBuf,
     models: Arc<ModelManager>,
@@ -777,6 +778,7 @@ impl CaptureEngine {
         Self {
             data_dir,
             devices: Mutex::new(DeviceSelection::default()),
+            diarization: Mutex::new(true),
             _resources_dir: resources_dir,
             models,
             context: Context {
@@ -842,6 +844,7 @@ impl CaptureEngine {
 }
 impl RecordingPort for CaptureEngine {
     fn configure(&self, settings: &Value) -> Result<()> {
+        *lock(&self.diarization) = settings["diarization"].as_bool().unwrap_or(true);
         *lock(&self.devices) = DeviceSelection {
             microphone: settings["microphoneDeviceId"]
                 .as_str()
@@ -904,10 +907,11 @@ impl RecordingPort for CaptureEngine {
         let (ready_tx, ready_rx) = mpsc::channel();
         let (done_tx, done) = mpsc::channel();
         let models = self.models.clone();
+        let diarization = *lock(&self.diarization);
         let context = self.context.clone();
         let id = meeting.to_owned();
         let inference=thread::Builder::new().name("tuck-local-speech".into()).spawn(move||{
-            let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||->Result<()>{let runtime=SpeechRuntime::load(&models,threads)?;let mut segmenters=HashMap::new();for (source,enabled)in [("microphone",microphone),("system",system)]{if enabled{segmenters.insert(source,Segmenter::new(&models.vad_path())?);}}let mut pipeline=SpeechPipeline{runtime,segmenters,meeting:id,on_segment};let _=ready_tx.send(Ok(()));inference_loop(work_rx,&mut pipeline)})).unwrap_or_else(|_|Err(error("Local transcription failed. The original audio has been preserved for recovery.")));
+            let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||->Result<()>{let runtime=SpeechRuntime::load(&models,threads,diarization)?;let mut segmenters=HashMap::new();for (source,enabled)in [("microphone",microphone),("system",system)]{if enabled{segmenters.insert(source,Segmenter::new(&models.vad_path())?);}}let mut pipeline=SpeechPipeline{runtime,segmenters,meeting:id,on_segment};let _=ready_tx.send(Ok(()));inference_loop(work_rx,&mut pipeline)})).unwrap_or_else(|_|Err(error("Local transcription failed. The original audio has been preserved for recovery.")));
             if let Err(e)=&result{let _=ready_tx.send(Err(e.clone()));context.fail(e.clone());}let _=done_tx.send(result);
         }).map_err(|_|error("The speech worker could not start."))?;
         let ready = ready_rx
@@ -1065,7 +1069,7 @@ impl RecordingPort for CaptureEngine {
                 "This meeting already contains audio. Import into a new meeting.",
             ));
         }
-        let mut runtime = SpeechRuntime::load(&self.models, threads)?;
+        let mut runtime = SpeechRuntime::load(&self.models, threads, *lock(&self.diarization))?;
         let mut segmenter = Segmenter::new(&self.models.vad_path())?;
         new_audio_dir(&directory)?;
         // Normalize into the new meeting only. Repairable interrupted headers are
@@ -1478,6 +1482,12 @@ impl Meter {
 }
 impl CaptureEngine {
     pub fn readiness(&self) -> Result<Value> {
+        self.readiness_for_sources(true)
+    }
+    pub fn readiness_for_dictation(&self) -> Result<Value> {
+        self.readiness_for_sources(false)
+    }
+    fn readiness_for_sources(&self, system_audio: bool) -> Result<Value> {
         let devices = capture_devices()?;
         let selected = lock(&self.devices).clone();
         let mic_present = devices["microphones"].as_array().is_some_and(|v| {
@@ -1491,7 +1501,7 @@ impl CaptureEngine {
         let model_ready = self.models.installed("parakeet");
         let helper_ready = !cfg!(target_os = "macos")
             || (helper_path("tuck-calendar", "TUCK_CALENDAR_HELPER").is_ok()
-                && helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok()
+                && (!system_audio || helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok())
                 && (!self.models.apple_installed()
                     || helper_path("tuck-speech", "TUCK_SPEECH_HELPER").is_ok()));
         let mut issues = vec![];
@@ -1504,7 +1514,7 @@ impl CaptureEngine {
         if !mic_present {
             issues.push(json!({"code":"microphone_missing","message":"The selected microphone is unavailable. Choose another device."}));
         }
-        if !system_present {
+        if system_audio && !system_present {
             issues.push(json!({"code":"system_missing","message":"The selected system audio source is unavailable."}));
         }
         // Status only: the helper must never request permission for readiness.
@@ -1516,7 +1526,7 @@ impl CaptureEngine {
         if permissions["microphone"] != "authorized" && cfg!(target_os = "macos") {
             issues.push(json!({"code":"microphone_permission","message":"Microphone permission is not confirmed. Use Test audio to request it, or allow Tuck in System Settings → Privacy & Security → Microphone."}));
         }
-        if permissions["system"] == false && cfg!(target_os = "macos") {
+        if system_audio && permissions["system"] == false && cfg!(target_os = "macos") {
             issues.push(json!({"code":"system_permission","message":"System audio permission is not confirmed. Use Test audio or allow Tuck in System Settings → Privacy & Security → Screen & System Audio Recording."}));
         }
         Ok(

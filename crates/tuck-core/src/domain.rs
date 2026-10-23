@@ -55,11 +55,20 @@ pub fn seconds(v: &Value) -> Result<f64> {
         .filter(|x| x.is_finite() && *x >= 0.)
         .ok_or_else(|| AppError::invalid("Time must be a finite, nonnegative number."))
 }
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MeetingKind {
+    #[default]
+    Meeting,
+    Dictation,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Meeting {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub kind: MeetingKind,
     pub created_at: String,
     pub duration: f64,
     pub status: String,
@@ -91,6 +100,7 @@ impl Meeting {
         Ok(Self {
             id: id(),
             title: title.trim().into(),
+            kind: MeetingKind::Meeting,
             created_at: now(),
             duration: 0.,
             status: "draft".into(),
@@ -109,6 +119,21 @@ impl Meeting {
             recovered_from: None,
             version: 0,
         })
+    }
+    pub fn create_dictation(title: &str) -> Result<Self> {
+        let mut meeting = Self::create(title)?;
+        meeting.kind = MeetingKind::Dictation;
+        Ok(meeting)
+    }
+    pub fn is_dictation(&self) -> bool {
+        self.kind == MeetingKind::Dictation
+    }
+    /// Seed the editable voice note once; raw segment evidence remains untouched.
+    pub fn seed_dictation_notes(&mut self, speech: &str) {
+        if self.is_dictation() && self.notes.is_empty() {
+            // Notes have the same bounded length as manual edits. Evidence is retained in full.
+            self.notes = speech.chars().take(200_000).collect();
+        }
     }
     pub fn dto(&self) -> Value {
         serde_json::to_value(self).expect("meeting DTO")

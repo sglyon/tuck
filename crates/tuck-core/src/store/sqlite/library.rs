@@ -5,7 +5,7 @@ use rusqlite::{params_from_iter, types::Value as SqlValue};
 use serde_json::{json, Value};
 
 const HEADER: &str = "json_object(
- 'id',m.id,'title',json_extract(m.document,'$.title'),'createdAt',m.created_at,
+ 'id',m.id,'title',json_extract(m.document,'$.title'),'kind',coalesce(json_extract(m.document,'$.kind'),'meeting'),'createdAt',m.created_at,
  'duration',json_extract(m.document,'$.duration'),'status',json_extract(m.document,'$.status'),
  'template',json_extract(m.document,'$.template'),'starred',json(CASE WHEN json_extract(m.document,'$.starred') THEN 'true' ELSE 'false' END),
  'isExample',json(CASE WHEN json_extract(m.document,'$.isExample') THEN 'true' ELSE 'false' END),

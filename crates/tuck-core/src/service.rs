@@ -90,6 +90,7 @@ impl MeetingService {
             for mut m in repo.recoverable()? {
                 let prior = (m.status.clone(), m.notion_status.clone());
                 m.interrupt();
+                Self::seed_dictation_notes(repo, &mut m)?;
                 if prior != (m.status.clone(), m.notion_status.clone()) {
                     repo.save(&mut m)?;
                 }
@@ -117,6 +118,34 @@ impl MeetingService {
             let m = r.get(id)?;
             Self::view(r, m)
         })
+    }
+    fn seed_dictation_notes(repo: &mut dyn Repository, meeting: &mut Meeting) -> Result<()> {
+        if meeting.is_dictation() && meeting.notes.is_empty() {
+            let mut segments = repo.raw_segments(&meeting.id)?;
+            segments.sort_by(|a, b| {
+                a["start"]
+                    .as_f64()
+                    .unwrap_or(0.)
+                    .total_cmp(&b["start"].as_f64().unwrap_or(0.))
+                    .then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
+            });
+            let speech = segments
+                .iter()
+                .filter_map(|segment| segment["text"].as_str())
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            meeting.seed_dictation_notes(&speech);
+        }
+        Ok(())
+    }
+    fn recording_settings(&self, meeting: &Meeting) -> Result<Value> {
+        let mut settings = self.get_settings()?;
+        if meeting.is_dictation() {
+            settings["diarization"] = json!(false);
+        }
+        Ok(settings)
     }
     fn changed(&self, id: &str) -> Result<Value> {
         let dto = self.meeting(id)?;
@@ -222,14 +251,25 @@ impl MeetingService {
         system: bool,
         microphone: bool,
     ) -> Result<Value> {
+        let _lifecycle = lock(&self.lifecycle)?;
+        self.assert_idle()?;
+        let mut meeting = None;
+        self.transaction(|r| {
+            meeting = Some(r.get(id)?);
+            Ok(Value::Null)
+        })?;
+        let meeting = meeting.expect("loaded meeting");
+        let (system, microphone) = if meeting.is_dictation() {
+            (false, true)
+        } else {
+            (system, microphone)
+        };
         if !(system || microphone) {
             return Err(AppError::invalid(
                 "Choose microphone, system audio, or both to record.",
             ));
         }
-        let _lifecycle = lock(&self.lifecycle)?;
-        self.assert_idle()?;
-        let settings = self.get_settings()?;
+        let settings = self.recording_settings(&meeting)?;
         self.adapters.capture.configure(&settings)?;
         self.mutate(id, |m| m.start())?;
         {
@@ -250,6 +290,7 @@ impl MeetingService {
             self.transaction(|r| {
                 let mut m = r.get(id)?;
                 m.capture_failed(!r.segments(id)?.is_empty());
+                Self::seed_dictation_notes(r, &mut m)?;
                 r.save(&mut m)?;
                 Ok(Value::Null)
             })?;
@@ -287,9 +328,12 @@ impl MeetingService {
         self.changed(id)
     }
     fn interrupted(&self, id: &str) -> Result<()> {
-        self.mutate(id, |m| {
+        self.transaction(|r| {
+            let mut m = r.get(id)?;
             m.interrupt();
-            Ok(())
+            Self::seed_dictation_notes(r, &mut m)?;
+            r.save(&mut m)?;
+            Ok(Value::Null)
         })?;
         self.changed(id)?;
         Ok(())
@@ -303,6 +347,14 @@ impl MeetingService {
         }
     }
     fn after_meeting(&self, id: &str) {
+        // Voice notes are raw dictation: global meeting automations never apply.
+        if self
+            .transaction(|r| Ok(json!(r.get(id)?.is_dictation())))
+            .unwrap_or(json!(true))
+            == true
+        {
+            return;
+        }
         if let Ok(settings) = self.get_settings() {
             for (key, kind) in [
                 ("autoSummary", "summary"),
@@ -332,11 +384,15 @@ impl MeetingService {
             keep = lock(&self.state)?.retain_audio;
             self.mutate(id, |m| m.process())?;
             self.changed(id)?;
-            let result = self
-                .adapters
-                .capture
-                .stop()
-                .and_then(|duration| self.mutate(id, |m| m.complete(duration)));
+            let result = self.adapters.capture.stop().and_then(|duration| {
+                self.transaction(|r| {
+                    let mut m = r.get(id)?;
+                    m.complete(duration)?;
+                    Self::seed_dictation_notes(r, &mut m)?;
+                    r.save(&mut m)?;
+                    Ok(Value::Null)
+                })
+            });
             lock(&self.state)?.active = None;
             if let Err(error) = result {
                 self.interrupted(id)?;
@@ -359,12 +415,8 @@ impl MeetingService {
         // Failed devices/inference may still have buffered callbacks. Preserve all drainable
         // evidence, but a stop error cannot prevent making the interruption durable.
         let _ = self.adapters.capture.stop();
-        self.mutate(id, |meeting| {
-            meeting.interrupt();
-            Ok(())
-        })?;
+        self.interrupted(id)?;
         lock(&self.state)?.active = None;
-        self.changed(id)?;
         (self.emit)(
             "recording_state",
             json!({"meetingId":id,"state":"interrupted"}),
@@ -387,6 +439,7 @@ impl MeetingService {
             self.assert_idle()?;
             let mut m = Meeting::create(title)?;
             if let Some(original) = source {
+                m.kind = original.kind;
                 m.recovered_from = Some(original.id.clone());
                 m.notes = original.notes.clone();
                 m.folder = original.folder.clone();
@@ -394,13 +447,14 @@ impl MeetingService {
                 m.people = original.people.clone();
                 m.calendar_event = original.calendar_event.clone();
             }
+            let settings = self.recording_settings(&m)?;
+            self.adapters.capture.configure(&settings)?;
             m.process()?;
             id = m.id.clone();
             self.transaction(|r| {
                 r.save(&mut m)?;
                 Ok(Value::Null)
             })?;
-            let settings = self.get_settings()?;
             keep = settings["keepAudio"] == true;
             lock(&self.state)?.active = Some(id.clone());
             let result = self
@@ -412,7 +466,15 @@ impl MeetingService {
                     self.callback(&id),
                     settings["threads"].as_u64().unwrap_or(2) as u32,
                 )
-                .and_then(|duration| self.mutate(&id, |m| m.complete(duration)));
+                .and_then(|duration| {
+                    self.transaction(|r| {
+                        let mut m = r.get(&id)?;
+                        m.complete(duration)?;
+                        Self::seed_dictation_notes(r, &mut m)?;
+                        r.save(&mut m)?;
+                        Ok(Value::Null)
+                    })
+                });
             lock(&self.state)?.active = None;
             if let Err(error) = result {
                 self.interrupted(&id)?;
@@ -644,8 +706,12 @@ impl MeetingService {
                 16_384,
                 false,
             )?),
-            "create_meeting" => {
-                let mut m = Meeting::create(optional(p, "title", "Untitled meeting")?)?;
+            "create_meeting" | "create_dictation" => {
+                let mut m = if method == "create_dictation" {
+                    Meeting::create_dictation(optional(p, "title", "Voice note")?)?
+                } else {
+                    Meeting::create(optional(p, "title", "Untitled meeting")?)?
+                };
                 self.transaction(|r| {
                     r.save(&mut m)?;
                     Ok(Value::Null)

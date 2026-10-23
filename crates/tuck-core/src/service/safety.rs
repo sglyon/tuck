@@ -351,6 +351,10 @@ impl MeetingService {
                 let mut m=entry.meeting.clone(); m.version=0; m.interrupt(); m.notion_url.clear(); m.notion_status="idle".into();
                 r.save(&mut m)?;
                 for s in &entry.segments { r.append(&TranscriptSegment::from_dto(s.clone())?)?; }
+                if m.is_dictation() && m.notes.is_empty() {
+                    Self::seed_dictation_notes(r, &mut m)?;
+                    if !m.notes.is_empty() { r.save(&mut m)?; }
+                }
                 for c in &entry.corrections { r.save_correction(&m.id,c["segmentId"].as_str().expect("validated correction"),Some(c))?; }
                 for s in &entry.speakers { r.save_speaker(&m.id,s)?; }
                 for v in &entry.messages { r.add_message(&m.id,v)?; }

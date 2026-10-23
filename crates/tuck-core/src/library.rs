@@ -195,7 +195,7 @@ impl LibraryQuery {
 }
 
 pub fn header(m: &Meeting) -> Value {
-    json!({"id":m.id,"title":m.title,"createdAt":m.created_at,"duration":m.duration,"status":m.status,"template":m.template,"starred":m.starred,"isExample":m.is_example,"notionUrl":m.notion_url,"notionStatus":m.notion_status,"folder":m.folder,"tags":m.tags,"people":m.people,"calendarEvent":m.calendar_event,"recoveredFrom":m.recovered_from,"taskCount":m.tasks.len(),"openTaskCount":m.tasks.iter().filter(|t| !t.done).count(),"hasNotes":!m.notes.is_empty(),"hasSummary":!m.summary.is_empty()})
+    json!({"id":m.id,"title":m.title,"kind":m.kind,"createdAt":m.created_at,"duration":m.duration,"status":m.status,"template":m.template,"starred":m.starred,"isExample":m.is_example,"notionUrl":m.notion_url,"notionStatus":m.notion_status,"folder":m.folder,"tags":m.tags,"people":m.people,"calendarEvent":m.calendar_event,"recoveredFrom":m.recovered_from,"taskCount":m.tasks.len(),"openTaskCount":m.tasks.iter().filter(|t| !t.done).count(),"hasNotes":!m.notes.is_empty(),"hasSummary":!m.summary.is_empty()})
 }
 pub fn task_position(v: &Value) -> Vec<String> {
     vec![
