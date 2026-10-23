@@ -6,8 +6,14 @@ use crate::{
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde_json::{json, Value};
 use std::{path::Path, sync::Mutex, time::Duration};
+mod library;
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meetings (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, document TEXT NOT NULL, version INTEGER NOT NULL CHECK(version > 0));
+CREATE INDEX IF NOT EXISTS meetings_timeline ON meetings(created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS meetings_recovery_status ON meetings(json_extract(document,'$.status'));
+CREATE INDEX IF NOT EXISTS meetings_recovery_publication ON meetings(json_extract(document,'$.notionStatus'));
+CREATE TABLE IF NOT EXISTS library_generation (id INTEGER PRIMARY KEY CHECK(id=1),generation INTEGER NOT NULL);
+INSERT OR IGNORE INTO library_generation VALUES(1,0);
 CREATE TABLE IF NOT EXISTS segments (meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,id TEXT NOT NULL,start REAL NOT NULL,document TEXT NOT NULL,PRIMARY KEY(meeting_id,id));
 CREATE INDEX IF NOT EXISTS segments_timeline ON segments(meeting_id,start);
 CREATE TABLE IF NOT EXISTS speakers (meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,id TEXT NOT NULL,name TEXT NOT NULL,color INTEGER NOT NULL,PRIMARY KEY(meeting_id,id));
@@ -70,7 +76,20 @@ impl SqliteStore {
         }
         db.pragma_update(None, "journal_mode", "WAL")
             .map_err(storage)?;
-        db.execute_batch(&format!("BEGIN IMMEDIATE;{SCHEMA}COMMIT;"))
+        let mut triggers = String::new();
+        for table in [
+            "meetings",
+            "segments",
+            "transcript_corrections",
+            "speakers",
+            "messages",
+            "bookmarks",
+        ] {
+            for action in ["INSERT", "UPDATE", "DELETE"] {
+                triggers.push_str(&format!("CREATE TRIGGER IF NOT EXISTS library_{table}_{action} AFTER {action} ON {table} BEGIN UPDATE library_generation SET generation=generation+1 WHERE id=1; END;"));
+            }
+        }
+        db.execute_batch(&format!("BEGIN IMMEDIATE;{SCHEMA}{triggers}COMMIT;"))
             .map_err(storage)?;
         Ok(Self { db: Mutex::new(db) })
     }
@@ -131,7 +150,7 @@ impl Repository for SqlRepository<'_> {
     fn list(&mut self) -> Result<Vec<Meeting>> {
         let mut statement = self
             .db
-            .prepare("SELECT document,version FROM meetings ORDER BY created_at DESC")
+            .prepare("SELECT document,version FROM meetings ORDER BY created_at DESC,id DESC")
             .map_err(storage)?;
         let rows = statement
             .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))
@@ -142,6 +161,18 @@ impl Repository for SqlRepository<'_> {
             result.push(Self::restore(d, v)?);
         }
         Ok(result)
+    }
+    fn recoverable(&mut self) -> Result<Vec<Meeting>> {
+        self.recoverable_meetings()
+    }
+    fn meeting_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value> {
+        self.page_meetings(query)
+    }
+    fn library_overview(&mut self) -> Result<Value> {
+        self.overview()
+    }
+    fn task_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value> {
+        self.page_tasks(query)
     }
     fn save(&mut self, m: &mut Meeting) -> Result<()> {
         let document = m.dto().to_string();

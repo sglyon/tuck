@@ -680,9 +680,13 @@ impl SearchQuery {
 
 /// Compose an effective evidence view without mutating the original speech record.
 pub fn corrected_segment(mut raw: Value, correction: Option<&Value>) -> Value {
-    raw["originalText"] = raw["text"].clone();
+    if let Some(object) = raw.as_object_mut() {
+        object.remove("originalText");
+        object.remove("correctedAt");
+    }
     raw["edited"] = json!(correction.is_some());
     if let Some(c) = correction {
+        raw["originalText"] = raw["text"].clone();
         raw["text"] = c["text"].clone();
         raw["correctedAt"] = c["updatedAt"].clone();
     }

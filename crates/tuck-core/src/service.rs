@@ -86,7 +86,7 @@ impl MeetingService {
             state: Mutex::new(State::default()),
         });
         service.transaction(|repo| {
-            for mut m in repo.list()? {
+            for mut m in repo.recoverable()? {
                 let prior = (m.status.clone(), m.notion_status.clone());
                 m.interrupt();
                 if prior != (m.status.clone(), m.notion_status.clone()) {
@@ -601,6 +601,26 @@ impl MeetingService {
         }
         let p = &params;
         match method {
+            "bootstrap_library" => {
+                let query = crate::library::LibraryQuery::from_value(p, false)?;
+                let settings = self.get_settings()?;
+                let accounts = self.adapters.accounts.accounts().unwrap_or_default();
+                let mut result = self.transaction(|r| Ok(json!({"meetingPage":r.meeting_page(&query)?,"library":r.library_overview()?})))?;
+                result["settings"] = settings;
+                result["accounts"] = json!(accounts);
+                result["status"] = self.get_status()?;
+                Ok(result)
+            }
+            "list_meetings" => {
+                let query = crate::library::LibraryQuery::from_value(p, false)?;
+                self.transaction(|r| r.meeting_page(&query))
+            }
+            "list_task_page" => {
+                let query = crate::library::LibraryQuery::from_value(p, true)?;
+                self.transaction(|r| r.task_page(&query))
+            }
+            "library_overview" => self.transaction(|r| r.library_overview()),
+            "get_meeting" => self.meeting(string(p, "meetingId")?),
             "bootstrap" => {
                 let settings = self.get_settings()?;
                 let accounts = self.adapters.accounts.accounts().unwrap_or_default();

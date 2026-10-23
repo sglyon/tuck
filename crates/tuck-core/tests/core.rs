@@ -6,6 +6,8 @@ use tuck_core::{
     store::{memory::MemoryStore, sqlite::SqliteStore},
     Adapters, AppError, MeetingService,
 };
+#[path = "core/library_loading.rs"]
+mod library_loading;
 fn tx(store: &dyn Store, mut f: impl FnMut(&mut dyn Repository) -> Result<Value>) -> Result<Value> {
     store.transaction(&mut f)
 }
@@ -799,6 +801,16 @@ fn opens_python_schema_v1_without_rewriting_documents() {
             assert_eq!(m.folder, "");
             assert!(m.tasks.is_empty());
             assert!(m.calendar_event.is_none());
+            let page = r.meeting_page(&tuck_core::library::LibraryQuery::from_value(
+                &json!({}),
+                false,
+            )?)?;
+            assert_eq!(page["meetings"][0]["folder"], "");
+            assert_eq!(page["meetings"][0]["tags"], json!([]));
+            assert_eq!(page["meetings"][0]["people"], json!([]));
+            assert_eq!(page["meetings"][0]["taskCount"], 0);
+            assert!(page["meetings"][0]["calendarEvent"].is_null());
+            assert!(page["meetings"][0]["recoveredFrom"].is_null());
             let s = TranscriptSegment::from_dto(segment("python-id", "native-segment"))?;
             r.append(&s)?;
             m.update(&json!({"notes":"Native edit"}))?;
@@ -1643,6 +1655,18 @@ fn corrections_preserve_raw_speech_guard_conflicts_and_drive_effective_evidence(
             .as_str()
             .unwrap()
             .to_owned();
+        let unchanged = call(
+            &r.service,
+            "correct_transcript",
+            json!({"meetingId":id,"segmentId":"drained","baseText":original,"text":original}),
+        );
+        assert_eq!(unchanged["segments"][0]["edited"], false);
+        assert!(unchanged["segments"][0].get("originalText").is_none());
+        tx(&*store, |repo| {
+            assert!(repo.corrections(&id)?.is_empty());
+            Ok(Value::Null)
+        })
+        .unwrap();
         let corrected = "The launch date is Thursday, according to my correction.";
         let meeting = call(
             &r.service,
@@ -1709,6 +1733,14 @@ fn corrections_preserve_raw_speech_guard_conflicts_and_drive_effective_evidence(
         );
         assert_eq!(reset["segments"][0]["text"], original);
         assert_eq!(reset["segments"][0]["edited"], false);
+        assert!(reset["segments"][0].get("originalText").is_none());
+        assert!(reset["segments"][0].get("correctedAt").is_none());
+        tx(&*store, |repo| {
+            assert!(repo.corrections(&id)?.is_empty());
+            assert_eq!(repo.raw_segments(&id)?[0]["text"], original);
+            Ok(Value::Null)
+        })
+        .unwrap();
         tx(&*store,|repo| { repo.save_correction(&id,"drained",Some(&json!({"segmentId":"drained","text":"Must roll back","updatedAt":domain::now()})))?; Err(AppError::invalid("rollback correction")) }).unwrap_err();
         assert_eq!(
             r.service.meeting(&id).unwrap()["segments"][0]["text"],

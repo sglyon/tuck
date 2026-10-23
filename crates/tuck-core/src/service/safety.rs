@@ -198,10 +198,13 @@ impl MeetingService {
             if current["text"] != base {
                 return Err(AppError::conflict());
             }
+            let original = current.get("originalText").unwrap_or(&current["text"]);
             let correction = text
-                .filter(|text| current["originalText"] != *text)
+                .filter(|text| original != *text)
                 .map(|text| json!({"segmentId":segment,"text":text,"updatedAt":domain::now()}));
-            r.save_correction(id, segment, correction.as_ref())?;
+            if correction.is_some() || current["edited"] == true {
+                r.save_correction(id, segment, correction.as_ref())?;
+            }
             Ok(Value::Null)
         })?;
         self.changed(id)

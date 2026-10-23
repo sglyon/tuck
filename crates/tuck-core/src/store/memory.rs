@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Mutex};
 #[derive(Clone, Default)]
 struct Data {
+    generation: i64,
     meetings: HashMap<String, Meeting>,
     segments: HashMap<String, Vec<Value>>,
     speakers: HashMap<String, Vec<Value>>,
@@ -44,8 +45,150 @@ impl Repository for Data {
     }
     fn list(&mut self) -> Result<Vec<Meeting>> {
         let mut meetings: Vec<_> = self.meetings.values().cloned().collect();
-        meetings.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        meetings.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
         Ok(meetings)
+    }
+    fn recoverable(&mut self) -> Result<Vec<Meeting>> {
+        Ok(self
+            .meetings
+            .values()
+            .filter(|m| {
+                matches!(m.status.as_str(), "recording" | "paused" | "processing")
+                    || m.notion_status == "syncing"
+            })
+            .cloned()
+            .collect())
+    }
+    fn meeting_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value> {
+        let position = query.position(self.generation)?;
+        let mut matches: Vec<_> = self
+            .meetings
+            .values()
+            .filter(|m| {
+                query.matches(m)
+                    && (query.query.is_empty()
+                        || [&m.title, &m.notes, &m.summary]
+                            .iter()
+                            .any(|v| v.to_ascii_lowercase().contains(&query.query))
+                        || self.segments.get(&m.id).into_iter().flatten().any(|s| {
+                            let correction = self
+                                .corrections
+                                .get(&m.id)
+                                .and_then(|v| v.iter().find(|c| c["segmentId"] == s["id"]));
+                            correction.unwrap_or(s)["text"]
+                                .as_str()
+                                .unwrap_or("")
+                                .to_ascii_lowercase()
+                                .contains(&query.query)
+                        }))
+            })
+            .collect();
+        matches.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        let total = matches.len();
+        let mut meetings: Vec<_> = matches
+            .into_iter()
+            .filter(|m| position.is_none_or(|p| [&m.created_at, &m.id] < [&p[0], &p[1]]))
+            .take(query.limit + 1)
+            .map(|m| {
+                let mut h = crate::library::header(m);
+                for (key, count) in [
+                    ("segmentCount", self.segments.get(&m.id).map_or(0, Vec::len)),
+                    ("speakerCount", self.speakers.get(&m.id).map_or(0, Vec::len)),
+                    ("messageCount", self.messages.get(&m.id).map_or(0, Vec::len)),
+                    (
+                        "bookmarkCount",
+                        self.bookmarks.get(&m.id).map_or(0, Vec::len),
+                    ),
+                ] {
+                    h[key] = json!(count);
+                }
+                h
+            })
+            .collect();
+        let next = if meetings.len() > query.limit {
+            meetings.pop();
+            let last = meetings.last().expect("nonempty page");
+            query.next_cursor(
+                self.generation,
+                vec![
+                    last["createdAt"].as_str().unwrap().into(),
+                    last["id"].as_str().unwrap().into(),
+                ],
+            )
+        } else {
+            Value::Null
+        };
+        Ok(json!({"meetings":meetings,"nextCursor":next,"total":total}))
+    }
+    fn library_overview(&mut self) -> Result<Value> {
+        use std::collections::BTreeSet;
+        let mut folders = BTreeSet::new();
+        let mut tags = BTreeSet::new();
+        let mut people = BTreeSet::new();
+        let mut active: Vec<_> = Vec::new();
+        for m in self.meetings.values() {
+            if !m.folder.is_empty() {
+                folders.insert(m.folder.clone());
+            }
+            tags.extend(m.tags.iter().cloned());
+            people.extend(m.people.iter().cloned());
+            if matches!(m.status.as_str(), "recording" | "paused" | "processing") {
+                active.push(m);
+            }
+        }
+        active.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        let max = crate::library::FACET_LIMIT;
+        Ok(
+            json!({"meetingCount":self.meetings.len(),"starredCount":self.meetings.values().filter(|m|m.starred).count(),"openTaskCount":self.meetings.values().flat_map(|m| &m.tasks).filter(|t| !t.done).count(),"activeMeetingId":active.first().map(|m| &m.id),"facetsTruncated":{"folders":folders.len()>max,"tags":tags.len()>max,"people":people.len()>max},"folders":folders.into_iter().take(max).collect::<Vec<_>>(),"tags":tags.into_iter().take(max).collect::<Vec<_>>(),"people":people.into_iter().take(max).collect::<Vec<_>>()}),
+        )
+    }
+    fn task_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value> {
+        let position = query.position(self.generation)?;
+        let mut tasks: Vec<_> = self
+            .meetings
+            .values()
+            .filter(|m| query.scope.matches(m))
+            .flat_map(|m| {
+                m.tasks
+                    .iter()
+                    .filter(|t| query.include_done || !t.done)
+                    .map(|t| {
+                        let mut value = serde_json::to_value(t).expect("task DTO");
+                        value["meetingId"] = json!(m.id);
+                        value["meetingTitle"] = json!(m.title);
+                        value
+                    })
+            })
+            .collect();
+        tasks.sort_by_key(crate::library::task_position);
+        let total = tasks.len();
+        let mut tasks: Vec<_> = tasks
+            .into_iter()
+            .filter(|t| position.is_none_or(|p| crate::library::task_position(t).as_slice() > p))
+            .take(query.limit + 1)
+            .collect();
+        let next = if tasks.len() > query.limit {
+            tasks.pop();
+            query.next_cursor(
+                self.generation,
+                crate::library::task_position(tasks.last().expect("nonempty page")),
+            )
+        } else {
+            Value::Null
+        };
+        Ok(json!({"tasks":tasks,"total":total,"nextCursor":next}))
     }
     fn save(&mut self, m: &mut Meeting) -> Result<()> {
         match self.meetings.get(&m.id) {
@@ -55,6 +198,7 @@ impl Repository for Data {
         }
         m.version += 1;
         self.meetings.insert(m.id.clone(), m.clone());
+        self.generation += 1;
         Ok(())
     }
     fn delete(&mut self, m: &Meeting) -> Result<()> {
@@ -62,6 +206,7 @@ impl Repository for Data {
             return Err(AppError::conflict());
         }
         self.meetings.remove(&m.id);
+        self.generation += 1;
         self.segments.remove(&m.id);
         self.speakers.remove(&m.id);
         self.messages.remove(&m.id);
@@ -77,6 +222,7 @@ impl Repository for Data {
             return Ok(false);
         }
         values.push(s.dto());
+        self.generation += 1;
         values.sort_by(|a, b| {
             a["start"]
                 .as_f64()
@@ -143,6 +289,7 @@ impl Repository for Data {
         if let Some(c) = correction {
             values.push(c.clone());
         }
+        self.generation += 1;
         Ok(())
     }
     fn speakers(&mut self, id: &str) -> Result<Vec<Value>> {
@@ -157,6 +304,7 @@ impl Repository for Data {
             .find(|v| v["id"] == speaker)
             .ok_or_else(|| AppError::invalid("This speaker is not part of the meeting."))?;
         value["name"] = json!(name);
+        self.generation += 1;
         Ok(())
     }
     fn save_speaker(&mut self, id: &str, speaker: &Value) -> Result<()> {
@@ -167,6 +315,7 @@ impl Repository for Data {
         } else {
             values.push(speaker.clone());
         }
+        self.generation += 1;
         Ok(())
     }
     fn messages(&mut self, id: &str) -> Result<Vec<Value>> {
@@ -181,6 +330,7 @@ impl Repository for Data {
             return Err(AppError::conflict());
         }
         v.push(m.clone());
+        self.generation += 1;
         Ok(())
     }
     fn bookmarks(&mut self, id: &str) -> Result<Vec<Value>> {
@@ -200,6 +350,7 @@ impl Repository for Data {
             return Err(AppError::conflict());
         }
         v.push(b.clone());
+        self.generation += 1;
         Ok(())
     }
     fn remove_bookmark(&mut self, id: &str, b: &str) -> Result<()> {
@@ -207,6 +358,7 @@ impl Repository for Data {
             .entry(id.into())
             .or_default()
             .retain(|v| v["id"] != b);
+        self.generation += 1;
         Ok(())
     }
     fn add_revision(&mut self, id: &str, revision: &Value) -> Result<()> {

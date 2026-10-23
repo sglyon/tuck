@@ -117,6 +117,11 @@ pub trait AudioArchivePort: Send + Sync {
 pub trait Repository {
     fn get(&mut self, id: &str) -> Result<Meeting>;
     fn list(&mut self) -> Result<Vec<Meeting>>;
+    /// Only records whose active/publication state requires crash recovery.
+    fn recoverable(&mut self) -> Result<Vec<Meeting>>;
+    fn meeting_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value>;
+    fn library_overview(&mut self) -> Result<Value>;
+    fn task_page(&mut self, query: &crate::library::LibraryQuery) -> Result<Value>;
     fn save(&mut self, meeting: &mut Meeting) -> Result<()>;
     fn delete(&mut self, meeting: &Meeting) -> Result<()>;
     fn append(&mut self, segment: &TranscriptSegment) -> Result<bool>;
