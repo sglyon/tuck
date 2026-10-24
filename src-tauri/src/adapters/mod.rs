@@ -5,6 +5,7 @@ pub mod backup;
 pub mod calendar;
 pub mod capture;
 pub mod chatgpt;
+pub mod dictation_target;
 pub mod import_audio;
 pub mod intelligence;
 pub mod models;
