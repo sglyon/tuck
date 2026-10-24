@@ -20,11 +20,31 @@ pub struct DesktopRuntime {
     capture: Arc<CaptureEngine>,
     pub archive: Arc<LocalArchive>,
     shortcut: Mutex<serde_json::Value>,
+    pub dictation: Arc<crate::global_dictation::GlobalDictation>,
+    text_delivery: Arc<crate::adapters::dictation_target::NativeTextDelivery>,
     reminders: crate::reminders::ReminderWorker,
     coaching: crate::coaching::CoachWorker,
     notion_auth: Arc<NotionAuth>,
 }
 impl DesktopRuntime {
+    /// Called on the native shortcut callback before spawning capture work.
+    pub fn dispatch_dictation(self: &Arc<Self>) {
+        let target = match self.dictation.prepare_target() {
+            Ok(target) => target,
+            Err(_) => return,
+        };
+        let controller = self.dictation.clone();
+        if std::thread::Builder::new()
+            .name("tuck-global-dictation".into())
+            .spawn(move || {
+                let _ = controller.toggle(target);
+            })
+            .is_err()
+        {
+            self.dictation.abandon_prepared();
+        }
+    }
+
     /// Explicit host activation; diagnostic composition remains inert.
     pub fn start_coaching(&self) -> Result<()> {
         self.coaching.start(self.service.clone())
@@ -61,6 +81,17 @@ impl DesktopRuntime {
                 .ok_or_else(|| AppError::new("invalid_arguments", format!("Missing {key}.")))
         };
         match method {
+            "global_dictation_status" => Ok(self.dictation.status()),
+            "global_dictation_toggle" => {
+                let target = self.dictation.prepare_target()?;
+                self.dictation.toggle(target)
+            }
+            "global_dictation_cancel" => self.dictation.cancel(),
+            "dictation_accessibility_settings" => {
+                self.text_delivery.open_accessibility_settings()?;
+                Ok(self.dictation.status())
+            }
+
             "notion_account_status" => self.notion_auth.status(),
             "notion_connect" => {
                 let before = self.notion_auth.status()?;
@@ -111,12 +142,13 @@ impl DesktopRuntime {
             }
             "shutdown" | "quit_app" => {
                 let _ = self.notion_auth.cancel_pending();
+                let dictation = self.dictation.shutdown();
                 // Stop/drain hardware before waiting on an already-sent AI request.
                 // Core shutdown first invalidates monitoring so its late result is discarded.
                 let stopped = self.service.handle("shutdown", json!({}));
                 let coaching = self.coaching.shutdown();
                 self.reminders.shutdown();
-                stopped.and_then(|value| coaching.map(|()| value))
+                stopped.and_then(|value| dictation.and(coaching).map(|()| value))
             }
             "audio_source" => {
                 self.service.handle(method, params.clone())?;
@@ -210,6 +242,7 @@ impl DesktopRuntime {
 impl Drop for DesktopRuntime {
     fn drop(&mut self) {
         let _ = self.notion_auth.cancel_pending();
+        let _ = self.dictation.shutdown();
         // Close capture promptly, then retain the application while joining AI work.
         let _ = self.service.handle("shutdown", serde_json::json!({}));
         let _ = self.coaching.shutdown();
@@ -268,11 +301,34 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
         secrets,
         archive: archive.clone(),
     };
+    let dictation_observer = Arc::new(Mutex::new(
+        Weak::<crate::global_dictation::GlobalDictation>::new(),
+    ));
+    let observer = dictation_observer.clone();
+    let core_emit = emit.clone();
     let service = MeetingService::new(
         Arc::new(SqliteStore::open(data.join("tuck.sqlite3"))?),
         adapters,
-        emit,
+        Arc::new(move |event, payload| {
+            if event == "meeting_updated" {
+                let dictation = observer.lock().ok().and_then(|weak| weak.upgrade());
+                if let Some(dictation) = dictation {
+                    dictation.observe_meeting(&payload["meeting"]);
+                }
+            }
+            core_emit(event, payload);
+        }),
     )?;
+    let text_delivery = Arc::new(crate::adapters::dictation_target::NativeTextDelivery::default());
+    let dictation = Arc::new(crate::global_dictation::GlobalDictation::new(
+        Arc::new(crate::global_dictation::NativeApplication {
+            service: service.clone(),
+            capture: capture.clone(),
+        }),
+        text_delivery.clone(),
+        emit,
+    ));
+    *dictation_observer.lock().unwrap_or_else(|p| p.into_inner()) = Arc::downgrade(&dictation);
     *application
         .lock()
         .map_err(|_| AppError::unavailable("Tuck's recording recovery could not initialize."))? =
@@ -281,6 +337,8 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
         service,
         capture,
         archive,
+        dictation,
+        text_delivery,
         shortcut: Mutex::new(
             serde_json::json!({"recordingShortcut":"CommandOrControl+Shift+R","recordingShortcutAvailable":false,"message":null,"lastIntent":null}),
         ),
