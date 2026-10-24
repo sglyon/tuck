@@ -34,11 +34,19 @@ In **Settings → Intelligence → Meeting agents**, edit the Quiet meeting help
 
 Agents share your selected AI provider. Automatic context contains a bounded recent transcript window, the selected instructions and a few earlier tips; it excludes handwritten notes, meeting metadata and manual chat. Monitoring pauses with recording and stops when the call ends. It starts off again after restart or an AI destination/account change. Quiet pacing, bounded requests and a three-open-tip limit keep help unobtrusive. See [behavior and limits](docs/live-coach-contract.md) and [verification](docs/native-verification.md).
 
+## Dictation anywhere
+
+Click a text field in another app, then press **Cmd/Ctrl + Shift + Space** to speak. Press it again to finish. Tuck stays in the background, saves a local voice note and copies the recognized words. The tray menu and Settings → Audio & models provide alternatives when the shortcut is unavailable.
+
+On macOS, Tuck can send a paste to the same confirmed editable field when you allow Accessibility access. Changing apps or fields, protected inputs and uncertain targets leave the text on the clipboard for manual paste. Windows and Linux use the clipboard/manual-paste path. Accessibility is optional for recording and copying; Tuck only opens its settings when you ask. “Paste sent” confirms dispatch, not that another app accepted the text.
+
+Choose **Dictate a note** for an editable note inside Tuck. **Copy text** uses your edits; **Original speech → Copy original speech** keeps the full recognized words available separately. Global dictation copies original speech rather than later edits. **Save without inserting** keeps the note without copying or pasting.
+
+Both workflows reuse the installed local Parakeet engine and microphone, with no second model, AI rewrite, network request or automatic Notion publication. After initial model setup, dictation works offline. This is Tuck’s own shortcut; it does not replace Apple’s dictation engine or take over Fn/Globe. See the [dictation contract](docs/dictation-contract.md).
+
 ## A meeting day
 
 Use the tray menu or **⌘/Ctrl ⇧ R** to start a meeting. The shortcut checks setup first; opening or importing a calendar event never starts recording. Connect the device calendar on macOS or import a local `.ics` snapshot. Next meeting opens preparation notes with the title and attendees; returning to the same occurrence reuses your existing notes. Optional five-minute reminders appear in Tuck, with system notifications where available while the app is running. Reminders stay quiet during recording, and never join a call or start capture. Calendar snapshots remain on this device and are excluded from portable backups. Audio settings include device selection and an explicit five-second sound check that does not save or transcribe audio.
-
-For a quick voice note, choose **Dictate**. Tuck uses the same local speech engine with only the microphone, then gives you editable text and Copy text. Original recognized speech remains accessible after edits. Voice notes do not automatically generate recaps or publish, and do not require the optional speaker model. This is in-app dictation; system-wide paste is not implemented.
 
 Recaps and personal notes are separately editable. Saved templates shape recaps; recipes run repeatable questions or prepare a proposed rewrite for review. Proposals preserve intervening edits. History keeps periodic checkpoints of manual edits and the text before accepted replacements, with prior versions available to restore. Add actions with owners and due dates, then use the task inbox to follow through across meetings.
 
@@ -86,7 +94,7 @@ Cargo builds the Rust backend; `native:setup` builds and stages platform helpers
 ## Present limits
 
 - The minimum comfortable target is a **16 GB laptop alongside an active video call**. This is the product requirement; the existing 32 GiB Mac measurements do not yet qualify it. The [three-minute native measurement](docs/sustained-performance.md) records a bounded public-audio baseline. Local chat-model memory is additional and depends on the model selected.
-- Desktop-first; no native mobile capture, automatic meeting-app detection or system-wide dictation yet. Device-calendar integration is read-only; direct Google/Outlook OAuth is not configured. ICS import is a snapshot and does not expand recurrence rules.
+- Desktop-first; no native mobile capture or automatic meeting-app detection. Global dictation is implemented; automatic paste is currently macOS-only and requires a confirmed original field. Device-calendar integration is read-only; direct Google/Outlook OAuth is not configured. ICS import is a snapshot and does not expand recurrence rules.
 - Apple Silicon uses an explicitly prepared Parakeet Core ML conversion with CPU/Neural Engine enabled. Other desktops use a bounded-thread quantized CPU baseline. CUDA/DirectML are candidates for a separately validated adapter, not enabled merely by naming a provider. [Measured comparisons](docs/rust-evaluation.md) and [Apple evaluation](docs/apple-speech-evaluation.md) record exact hardware, models and caveats. No minimum-spec or long-meeting resource qualification is claimed yet.
 - Speaker clustering is provisional per speech turn. Overlapping voices and echo from loudspeakers can reduce quality; no acoustic echo cancellation is implemented yet.
 - Audio import accepts PCM WAV, MP3, FLAC and AAC-LC (`.m4a`, `.mp4`, `.aac`, `.adts`), with one or two channels at 8–192 kHz, up to 2 GiB and 12 hours. Tuck streams conversion to local mono PCM without changing the original. AAC priming/padding is retained; protected audio and ALAC are not supported. See [audio import](docs/native-audio-import.md).

@@ -1,52 +1,55 @@
 {
-  "verifiedAt": "2026-10-23T19:36:48.361528+00:00",
-  "applicationSourceCommit": "ab02f9e912cf69e590f6dfcaa4841fa6e202da52",
+  "verifiedAt": "2026-10-24T16:56:34.838594+00:00",
+  "applicationSourceCommit": "5845dce9f1e02948cf97dd36f890e89c82279b2e",
   "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
-  "bundleBytes": 62191927,
-  "mainExecutableSha256": "e81d6f4eb763031a510f5cd1afd8ad7701cffd3c8ca633f3aed20e5756be7b10",
+  "bundleBytes": 62258215,
+  "mainExecutableSha256": "feea7877db7a68a55f6eab8cdd0ecb453bd9344068fa6a10ba1157db0ef2c34a",
   "pythonFiles": [],
   "bundledModelOrQualificationFiles": [],
   "licensePresent": true,
   "coreUnitTestsPassed": 3,
   "coreIntegrationTestsPassed": 83,
-  "nativeLibraryTestsPassed": 120,
+  "nativeLibraryTestsPassed": 137,
   "nativeLibraryTestsIgnored": 2,
-  "desktopLifecycleTestsPassed": 2,
+  "desktopLifecycleTestsPassed": 3,
   "uiUnitTestsPassed": 7,
-  "uiE2ETestsPassed": 77,
-  "uiVisualOnlyTestsSkipped": 5,
+  "uiE2ETestsPassed": 85,
+  "uiVisualOnlyTestsSkipped": 6,
+  "formatting": "passed",
+  "strictNativeClippy": "passed",
+  "globalDictationHostAndAcceptanceTestsPassed": 11,
+  "globalDictationDeliveryTestsPassed": 6,
   "impeccableScores": {
-    "liveCoachA": 33,
-    "agentSettingsA": 31,
-    "liveAgentsBInitial": 31,
-    "liveAgentsBFinal": 33
+    "globalDictationOriginal": 32
   },
-  "liveAgentIntegrationEvidence": "live-agents.json",
-  "previousNativeAcceptanceEvidence": "notion-template-package.json",
-  "nativeAcceptanceChecks": [
-    "exact final package opens local library without waiting for credential values",
-    "Settings Intelligence shows Quiet meeting helper and Sales coach",
-    "native agent editor exposes name, instructions and quiet/active pace",
-    "navigation preserves the test draft; explicit Cancel restores saved profiles",
-    "final package quits and relaunches cleanly",
-    "relaunch shows unchanged saved profiles and no verification draft"
-  ],
+  "impeccableVerdict": "ship for the single listed status-continuity fix; resolved; original 32/40 retained without whole-surface rescore",
+  "previousNativeAcceptanceEvidence": "live-agents-package.json",
+  "nativeAcceptanceChecks": [],
+  "nativeWindowCheck": "blocked: session Mac locked; user asked to unlock after packaging",
+  "globalDictationIntegration": {
+    "sqlite": "temporary real on-disk SQLite, reopen verified",
+    "speech": "synthetic callbacks including final stop drain",
+    "clipboard": "fake only",
+    "noIntelligencePublicationOrCredentialRead": "panic-on-use adapters; meeting automation settings enabled",
+    "existingCaptureExclusion": "passed without stopping or copying other recording"
+  },
   "microphoneAccess": false,
   "systemAudioAccess": false,
   "chatgptAccountAccess": false,
   "notionAccountAccess": false,
   "externalProviderAccess": false,
-  "credentialMetadataOnly": true,
+  "actualClipboardAccess": false,
+  "accessibilityPermissionChanged": false,
   "minimum16GBRealCallQualified": false,
   "distribution": "Unsigned development app",
   "buildAdvisories": [
-    "Main JavaScript chunk 556.50kB (168.57kB gzip), above Vite 500kB advisory."
+    "Main JavaScript chunk 563.61kB (170.41kB gzip), above Vite 500kB advisory."
   ],
   "nativeAcceptanceLimits": [
-    "Agent editor draft check used preceding package with identical frontend assets; final package independently opened, quit, relaunched and displayed saved profiles.",
-    "No real local LLM or paid hosted inference; native AI transport used a synthetic loopback provider.",
-    "No live microphone/system-audio capture, noisy-call model-quality or 16GB active-video-call qualification.",
-    "Notion publication, ChatGPT account access and audio playback were not repeated on this exact package; previous acceptance is archived separately.",
-    "No Windows/Linux hardware, native mobile, signing/notarization or update-channel qualification."
+    "No real native shortcut, live microphone, OS Accessibility or clipboard/paste acceptance for this package; Mac was locked.",
+    "Same-field, secure-input, focus-change and modifier policies are source-reviewed and fake-backend tested, not target-app compatibility qualification.",
+    "Windows/Linux currently copy only; their hardware and desktop-session clipboard compatibility are unqualified.",
+    "No native mobile, real call/16GB performance, release signing/notarization or update-channel qualification.",
+    "Historical Notion, account and public-audio acceptance was not repeated on this package."
   ]
 }

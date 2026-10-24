@@ -44,6 +44,7 @@ The native workflow owner keeps `engine_call` as the UI entry point and routes d
 - `calendar_events {from,to}` -> CalendarEvent array, bounded date range.
 - `import_calendar {path}` -> CalendarEvent array from a chosen local ICS file for portable fallback. Be clear that this is import, not Google/Outlook OAuth sync.
 - `hide_window {}` and `quit_app {}` for a persistent tray app after frontend note flushing.
+- Global dictation status/toggle/cancel and explicit Accessibility settings use the [dictation host contract](dictation-contract.md). The shortcut saves a microphone-only voice note, copies original speech and conditionally sends a paste to the same macOS field; Windows/Linux use manual paste. No additional model, AI/network processing or automatic publication is introduced.
 
 Native Calendar uses EventKit on macOS, local ICS import elsewhere. Direct Google/Outlook OAuth needs a registered client and must not be simulated. Root/native agent agree exact events for global shortcut/tray activation and guarded quit before implementation. Recording starts only through an explicit user action, never solely because a calendar event exists.
 
@@ -57,4 +58,4 @@ Every changed UI area receives an Impeccable confirmation review and must meet t
 
 ## Remaining backlog after this wave
 
-Richer Notion updates and setup; audio playback/corrections and in-app recording recovery; custom vocabulary and broad import; backup/restore; mobile/device continuity; sharing/collaboration; optional system-wide dictation; release signing/updating; real meeting and 16 GB qualification. Root keeps these visible rather than declaring them complete when only a first slice exists.
+Richer Notion updates and setup; audio playback/corrections and in-app recording recovery; custom vocabulary and broad import; backup/restore; mobile/device continuity; sharing/collaboration; Windows/Linux dictation insertion, shortcut customization and snippets; release signing/updating; real meeting and 16 GB qualification. Root keeps these visible rather than declaring them complete when only a first slice exists.

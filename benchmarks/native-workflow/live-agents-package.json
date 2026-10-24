@@ -1,0 +1,52 @@
+{
+  "verifiedAt": "2026-10-23T19:36:48.361528+00:00",
+  "applicationSourceCommit": "ab02f9e912cf69e590f6dfcaa4841fa6e202da52",
+  "bundle": "/Users/sglyon/src/tuck/src-tauri/target/release/bundle/macos/Tuck.app",
+  "bundleBytes": 62191927,
+  "mainExecutableSha256": "e81d6f4eb763031a510f5cd1afd8ad7701cffd3c8ca633f3aed20e5756be7b10",
+  "pythonFiles": [],
+  "bundledModelOrQualificationFiles": [],
+  "licensePresent": true,
+  "coreUnitTestsPassed": 3,
+  "coreIntegrationTestsPassed": 83,
+  "nativeLibraryTestsPassed": 120,
+  "nativeLibraryTestsIgnored": 2,
+  "desktopLifecycleTestsPassed": 2,
+  "uiUnitTestsPassed": 7,
+  "uiE2ETestsPassed": 77,
+  "uiVisualOnlyTestsSkipped": 5,
+  "impeccableScores": {
+    "liveCoachA": 33,
+    "agentSettingsA": 31,
+    "liveAgentsBInitial": 31,
+    "liveAgentsBFinal": 33
+  },
+  "liveAgentIntegrationEvidence": "live-agents.json",
+  "previousNativeAcceptanceEvidence": "notion-template-package.json",
+  "nativeAcceptanceChecks": [
+    "exact final package opens local library without waiting for credential values",
+    "Settings Intelligence shows Quiet meeting helper and Sales coach",
+    "native agent editor exposes name, instructions and quiet/active pace",
+    "navigation preserves the test draft; explicit Cancel restores saved profiles",
+    "final package quits and relaunches cleanly",
+    "relaunch shows unchanged saved profiles and no verification draft"
+  ],
+  "microphoneAccess": false,
+  "systemAudioAccess": false,
+  "chatgptAccountAccess": false,
+  "notionAccountAccess": false,
+  "externalProviderAccess": false,
+  "credentialMetadataOnly": true,
+  "minimum16GBRealCallQualified": false,
+  "distribution": "Unsigned development app",
+  "buildAdvisories": [
+    "Main JavaScript chunk 556.50kB (168.57kB gzip), above Vite 500kB advisory."
+  ],
+  "nativeAcceptanceLimits": [
+    "Agent editor draft check used preceding package with identical frontend assets; final package independently opened, quit, relaunched and displayed saved profiles.",
+    "No real local LLM or paid hosted inference; native AI transport used a synthetic loopback provider.",
+    "No live microphone/system-audio capture, noisy-call model-quality or 16GB active-video-call qualification.",
+    "Notion publication, ChatGPT account access and audio playback were not repeated on this exact package; previous acceptance is archived separately.",
+    "No Windows/Linux hardware, native mobile, signing/notarization or update-channel qualification."
+  ]
+}

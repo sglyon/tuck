@@ -63,6 +63,8 @@ Desktop startup returns a bounded page of meeting headers and global scalar coun
 
 A second host-owned worker periodically offers live-agent snapshots to the same service and IntelligencePort. Core policy bounds effective recent evidence, cadence, selection and durable suggestion history. The native adapter serializes model requests with manual priority and caps automatic context/output/transport. Enabled state is transient; neither restart nor backup restore starts an agent. This adds no model instance, event bus or separate hosted agent service. See [agent contract](live-coach-contract.md) and [native limits](live-coach-native.md).
 
+Global dictation is a thin native host coordinator over that same voice-note lifecycle and capture adapter. A text-delivery port isolates the write-only clipboard and conservative macOS field-identity/paste checks. The transient session is invalidated before cancellation/shutdown can deliver stale text; SQLite retains the completed note and original evidence. Windows/Linux currently stop at copying. This adds no domain context, model instance, network service or background AI work. See [dictation contract](dictation-contract.md).
+
 ## Replacing SQLite later
 
 Implement the existing core-owned `Store` and `Repository` ports in a hosted adapter, then select that adapter at the composition root. Use stable UUID meeting/segment IDs, durable transcript ordering, atomic metadata version checks, idempotent segment insertion, and atomic deletion. Run the repository contract tests against that implementation.

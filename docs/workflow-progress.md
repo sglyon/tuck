@@ -6,6 +6,7 @@ This extends the competitive research in [research.md](research.md). Implemented
 
 | Need | Implementation | Limit |
 | --- | --- | --- |
+| Dictation anywhere | Cmd/Ctrl + Shift + Space toggles a saved microphone-only voice note; original speech is copied; macOS same-field paste is conditional on Accessibility and identity checks | Windows/Linux copy for manual paste; no Fn/Globe or Apple-engine replacement; platform behavior needs native qualification |
 | Quick capture | Persistent tray, explicit record shortcut, setup gating, save before hide/quit | No automatic detection of meeting apps or ambient recording |
 | Meeting context | Read-only macOS EventKit connection, persistent next meeting, atomic occurrence preparation, optional five-minute reminders, portable ICS import | Device calendar and native notification delivery need platform acceptance; reminders never record or join; ICS is a snapshot without recurrence expansion; no direct Google/Outlook OAuth |
 | Capture confidence | Device selection, preflight readiness, explicit five-second sound check, silence warnings | Real microphones/system capture and permission behavior still need hardware qualification |
@@ -31,7 +32,7 @@ Broader file import is also implemented: PCM WAV, MP3, FLAC and AAC-LC stream th
 1. Custom vocabulary with a validated recognition path. The [acoustic qualification](vocabulary-qualification.md) corrected names but also inserted one into ordinary speech, so it remains a developer prototype. [Backend evaluation](vocabulary-evaluation.md) records the remaining requirements.
 2. Automatic meeting-app detection, persistent voice identity and better overlap/echo handling, each with realistic privacy and accuracy checks.
 3. Native mobile capture and device continuity; hosted synchronization/sharing require account ownership, offline conflicts and retention decisions.
-4. Cross-application dictation and snippets. In-app microphone-only voice notes are now implemented with editable text, original recognized speech and explicit copy; they reuse Parakeet and skip meeting automation.
+4. Expand global dictation only after platform qualification: Windows/Linux insertion, shortcut customization and snippets. The current toggle saves a local voice note, copies original speech and conditionally sends a paste on macOS; it reuses Parakeet and skips AI/meeting automation.
 
 ## Connection and voice-note increment
 
@@ -44,6 +45,12 @@ The subsequent template setup creates an explicitly chosen destination with seve
 Settings → Intelligence contains two editable starting agents and a small custom-agent editor. Each call chooses up to three agents and explicitly turns them on. A single bounded model batch can supply up to two transcript-linked tips; three open tips pause further checks. Users can dismiss advice or explicitly save follow-ups into the existing task list. Handwritten notes, meeting metadata and manual chat are excluded from automatic prompts. Changing AI destinations or accounts requires a fresh per-call opt-in.
 
 The portable service owns cadence, grounding, deduplication, stale-result checks and explicit task creation. SQLite and in-memory adapters read at most64 effective recent segments, then prompts enforce an encoded byte limit. One native worker and the existing selected provider supply the execution; no separate agent framework or model is added. See [contract](live-coach-contract.md), [native transport limits](live-coach-native.md) and [UI](live-coach-ui.md). Final checks passed3 core unit+83 core integration,120 native library,2 desktop lifecycle,7 UI unit and77 browser behavior tests. Independent final review scored33/40. Native startup, editor draft recovery/cancel, clean quit and relaunch passed; model usefulness and16GB call-time behavior remain unqualified. Details are recorded in [native verification](native-verification.md).
+
+## Global dictation increment
+
+Cmd/Ctrl + Shift + Space now toggles microphone-only dictation without bringing Tuck forward. The existing core saves a voice note before delivery. Original speech supplies the copied text; editable notes remain separate, and Copy original speech preserves the complete source. macOS sends a paste only to the confirmed original editable field with user-controlled Accessibility permission; Windows/Linux use manual paste. Save without inserting and ordinary voice-note Stop retain the note without global delivery.
+
+There is no second model, speech service, AI rewrite, network request or automatic publication. The shortcut does not replace Fn/Globe or Apple’s dictation engine. The shared UI status uses no polling and one persistent polite announcer; its eight behavior tests and one consolidated desktop/compact confirmation passed. Native capture, OS permission and target-app acceptance remain separate checks. See [dictation contract](dictation-contract.md) and [UI evidence](global-dictation-ui.md).
 
 ## Release qualification
 

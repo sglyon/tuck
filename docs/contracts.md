@@ -47,6 +47,8 @@ Model option `{id,name}`.
 - export_meeting `{meetingId,format:"markdown"|"json"|"srt",path?:string}` -> `{content:string,path?:string}`. Native save path; never allow arbitrary read access beyond native chosen import.
 - shutdown -> null
 
+Global dictation adds native status/toggle/cancel commands and `global_dictation_updated` with a direct status payload; see the [dictation host contract](dictation-contract.md) for exact fields and delivery boundaries. It reuses the core voice-note lifecycle.
+
 ## Events
 
 - meeting_updated `{meeting:Meeting}` (persist BEFORE emitting)
