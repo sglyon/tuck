@@ -3905,6 +3905,27 @@ mark {
   padding-bottom: 25px;
   border-bottom: 1px solid #e7eaf0;
 }
+.global-dictation-settings { margin-bottom: 30px; padding-bottom: 25px; border-bottom: 1px solid var(--line); }
+.global-dictation-settings .section-description { margin-bottom: 16px; }
+.global-dictation-shortcut { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #536179; }
+.global-dictation-shortcut kbd { border: 1px solid #dce2ed; border-bottom-color: #bac5dc; border-radius: 5px; padding: 7px 10px; background: #f8f9fc; color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 550; line-height: 1.4; white-space: normal; }
+.global-dictation-instructions { color: var(--ink); font-size: 13px; line-height: 1.8; max-width: 65ch; margin: 14px 0 8px; }
+.global-dictation-privacy { color: #536179; font-size: 12px; line-height: 1.7; margin: 0 0 14px; }
+.global-dictation-warning { color: #99454e; font-size: 13px; line-height: 1.7; margin: 12px 0; }
+.global-dictation-permission { margin: 17px 0; font-size: 13px; line-height: 1.7; color: #536179; max-width: 65ch; }
+.global-dictation-permission p { margin: 0 0 10px; }
+.global-dictation-link { border: 0; background: transparent; color: var(--accent); cursor: pointer; padding: 7px 0; font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.global-dictation-permission > .global-dictation-link { margin-left: 14px; }
+.global-dictation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+.global-dictation-result { font-size: 13px; color: #536179; line-height: 1.7; margin: 14px 0 0; }
+.global-dictation-result p { margin: 4px 0; }
+.global-dictation-indicator { display: flex; flex-wrap: wrap; flex-shrink: 0; align-items: center; gap: 10px; padding: 10px 22px; background: #f4f6fd; border-bottom: 1px solid var(--line); color: #536179; font-size: 12px; line-height: 1.6; }
+.global-dictation-indicator > svg { flex-shrink: 0; }
+.global-dictation-indicator > div:first-of-type { flex: 1; min-width: 130px; }
+.global-dictation-indicator strong { font-size: 12px; font-weight: 550; }
+.global-dictation-indicator p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.global-dictation-indicator-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.global-dictation-indicator.has-error { background: #fbf5f5; color: #99454e; }
 .readiness-result {
   padding: 10px 0;
   font-size: 13px;

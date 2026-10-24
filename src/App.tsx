@@ -51,6 +51,8 @@ import { useLibraryIndex } from "./lib/useLibraryIndex";
 import { meetingHeader, pruneDetails } from "./lib/library";
 import Settings from "./components/Settings";
 import LiveCoach from "./components/LiveCoach";
+import { GlobalDictationAnnouncer, GlobalDictationIndicator } from "./components/GlobalDictation";
+import { useGlobalDictation } from "./lib/useGlobalDictation";
 import {
   RetainedAudio,
   TranscriptCorrection,
@@ -88,6 +90,7 @@ import type {
   LibraryBootstrap,
   EngineEvent,
   EngineStatus,
+  GlobalDictationStatus,
   ExportFormat,
   Meeting,
   MeetingChanges,
@@ -238,6 +241,7 @@ export default function App() {
   const [meetings, commitMeetings] = useState<Meeting[]>([]);
   const [settings, setSettings] = useState<SettingsData>(defaults);
   const meetingDay = useMeetingDay();
+  const globalDictation = useGlobalDictation();
   const [status, setStatus] = useState<EngineStatus>(emptyStatus);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -502,6 +506,9 @@ export default function App() {
     void subscribe((e: EngineEvent) => {
       const p = e.payload;
       switch (e.event) {
+        case "global_dictation_updated":
+          globalDictation.receive(p as unknown as GlobalDictationStatus);
+          break;
         case "desktop_intent":
           void desktopIntent
             .current(String(p.intent))
@@ -1352,6 +1359,7 @@ export default function App() {
     <div
       className={`app-shell mobile-${pane}${!assistantOpen || dictation ? " assistant-hidden" : ""}${view !== "meeting" ? " settings-active" : ""}`}
     >
+      <GlobalDictationAnnouncer controller={globalDictation} />
       <aside className="sidebar" aria-label="Conversation library">
         <div className="sidebar-tools">
           <div className="sidebar-brand">
@@ -1632,6 +1640,7 @@ export default function App() {
             )}
           </div>
         </div>
+        <GlobalDictationIndicator controller={globalDictation} onSetup={() => { setSettingsSection("Audio & models"); setView("settings"); setPane("document"); }} onOpenNote={(id) => { choose(id); setTab("notes"); }} />
         <MeetingReminder
           controller={meetingDay}
           onPrepare={prepareCalendarMeeting}
@@ -1641,6 +1650,8 @@ export default function App() {
         {view === "settings" ? (
           <div className="document-scroll settings-scroll">
             <Settings
+              globalDictation={globalDictation}
+              onOpenVoiceNote={(id) => { choose(id); setTab("notes"); }}
               initialTab={settingsSection}
               settings={settings}
               accounts={accounts}

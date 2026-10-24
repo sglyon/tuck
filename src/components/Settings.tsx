@@ -23,6 +23,8 @@ import NotionConnection from "./NotionConnection";
 import SavedWriting from "./SavedWriting";
 import MeetingAgents from "./MeetingAgents";
 import DesktopControls from "./DesktopControls";
+import GlobalDictation from "./GlobalDictation";
+import type { GlobalDictationController } from "../lib/useGlobalDictation";
 import { call, native, openExternal } from "../lib/bridge";
 import type {
   Settings as SettingsData,
@@ -31,6 +33,8 @@ import type {
   ModelOption,
 } from "../lib/types";
 type Props = {
+  globalDictation: GlobalDictationController;
+  onOpenVoiceNote: (id: string) => void;
   initialTab?: string;
   meetingCount: number;
   beforeFileOperation: () => Promise<boolean>;
@@ -99,6 +103,8 @@ export default function Settings({
   onAccounts,
   onStatus,
   notify,
+  globalDictation,
+  onOpenVoiceNote,
 }: Props) {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -567,6 +573,7 @@ export default function Settings({
         )}
         {tab === "Audio & models" && (
           <>
+            <GlobalDictation controller={globalDictation} platform={status.platform} onOpenNote={onOpenVoiceNote} />
             <DesktopControls settings={s} onUpdate={onUpdate} notify={notify} />
             <div className="section-heading">
               <AudioLines size={18} />

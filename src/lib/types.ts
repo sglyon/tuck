@@ -179,6 +179,15 @@ export interface EngineStatus {
   captureAvailable: boolean;
   error?: string;
 }
+export interface GlobalDictationStatus {
+  shortcut: string;
+  shortcutAvailable: boolean;
+  state: "idle" | "starting" | "listening" | "processing" | "copied" | "paste_sent" | "error";
+  message?: string | null;
+  meetingId?: string | null;
+  pasteAvailable?: boolean;
+  pastePermission?: "granted" | "denied" | "unavailable" | "unknown";
+}
 export interface Account {
   id: string;
   email: string;
