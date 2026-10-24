@@ -24,8 +24,16 @@
   },
   "impeccableVerdict": "ship for the single listed status-continuity fix; resolved; original 32/40 retained without whole-surface rescore",
   "previousNativeAcceptanceEvidence": "live-agents-package.json",
-  "nativeAcceptanceChecks": [],
-  "nativeWindowCheck": "blocked: session Mac locked; user asked to unlock after packaging",
+  "nativeAcceptanceChecks": [
+    "Quit preceding running package and opened the exact final bundle.",
+    "Settings Audio & models displays Dictation anywhere, Cmd + Shift + Space, and Not recording.",
+    "Native status reports shortcut registration available; no conflict or status error is shown.",
+    "Accessibility unavailable is described as clipboard/manual-paste fallback; Check again completes without requesting permission.",
+    "File menu contains Dictate anywhere and Record a meeting.",
+    "Final package quits, relaunches and returns to idle dictation with the two existing library entries preserved.",
+    "Left at Settings Audio & models; no recording, clipboard write, permission grant or external provider request initiated."
+  ],
+  "nativeWindowCheck": "passed: exact final package opened, setup inspected, quit and relaunched via native UI",
   "globalDictationIntegration": {
     "sqlite": "temporary real on-disk SQLite, reopen verified",
     "speech": "synthetic callbacks including final stop drain",
@@ -46,10 +54,11 @@
     "Main JavaScript chunk 563.61kB (170.41kB gzip), above Vite 500kB advisory."
   ],
   "nativeAcceptanceLimits": [
-    "No real native shortcut, live microphone, OS Accessibility or clipboard/paste acceptance for this package; Mac was locked.",
+    "Native setup/status, menu and quit/relaunch verified; actual hotkey dispatch, live microphone, clipboard and target-app insertion were not exercised. Accessibility is not enabled for Tuck.",
     "Same-field, secure-input, focus-change and modifier policies are source-reviewed and fake-backend tested, not target-app compatibility qualification.",
     "Windows/Linux currently copy only; their hardware and desktop-session clipboard compatibility are unqualified.",
     "No native mobile, real call/16GB performance, release signing/notarization or update-channel qualification.",
     "Historical Notion, account and public-audio acceptance was not repeated on this package."
-  ]
+  ],
+  "nativeAcceptanceVerifiedAt": "2026-10-24T18:35:16.776378+00:00"
 }
