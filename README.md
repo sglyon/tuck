@@ -100,3 +100,31 @@ Cargo builds the Rust backend; `native:setup` builds and stages platform helpers
 - Audio import accepts PCM WAV, MP3, FLAC and AAC-LC (`.m4a`, `.mp4`, `.aac`, `.adts`), with one or two channels at 8–192 kHz, up to 2 GiB and 12 hours. Tuck streams conversion to local mono PCM without changing the original. AAC priming/padding is retained; protected audio and ALAC are not supported. See [audio import](docs/native-audio-import.md).
 - Model downloads and hosted features need a connection. Ordinary local transcription works offline after setup.
 - Hosted/realtime persistence will need account ownership, authorization and offline conflict decisions as well as a new repository adapter. Those are intentionally absent from this local release.
+
+## Signed macOS releases
+
+The root Makefile builds Apple Silicon or Intel packages for the current Mac. It requires the tools above and a valid Developer ID Application certificate with its private key in Keychain. All generated release files stay under the ignored `src-tauri/target/` directory.
+
+One-time setup: create an app-specific password at https://account.apple.com, then run this in an interactive terminal:
+
+```sh
+make auth APPLE_ID=your-apple-developer-email
+```
+
+Enter the app-specific password at the secure prompt. `notarytool` validates the account and stores credentials under the `tuck-notary` Keychain profile. Never put the password in the Makefile, shell arguments, or repository. Existing profiles can be selected with `NOTARY_PROFILE=profile-name`.
+
+Quit Tuck and run:
+
+```sh
+make release
+```
+
+This checks notarization credentials, installs locked npm dependencies, builds native helpers, signs all helpers and the release app with hardened runtime and a timestamp, submits the app to Apple, staples its ticket, builds and signs a DMG without Finder automation, notarizes and staples the DMG, verifies signatures/tickets/Gatekeeper, and copies the app to `/Applications`. The final DMG is `src-tauri/target/release/bundle/distribution/Tuck_<version>_<architecture>.dmg`. Speech models are downloaded separately in the app.
+
+The default signing identity is the first Lyon Cubs Developer ID Application certificate found by `security find-identity`; override with `SIGNING_IDENTITY=<certificate-SHA1>` when needed. `APPLE_TEAM_ID`, `NOTARY_PROFILE`, and `INSTALL_DIR` can also be overridden. Signing uses the local private key without exporting it.
+
+To build without submitting to Apple, use `make signed-app dmg`. To finish the current signed build after configuring credentials, use `make notarize-app dmg notarize-dmg verify install`. Each submission prints its ID; if a wait times out, inspect or wait for that ID with `xcrun notarytool info <id> --keychain-profile tuck-notary` or `xcrun notarytool wait <id> --keychain-profile tuck-notary`. For a rejected submission, retrieve Apple's diagnostics with `xcrun notarytool log <id> --keychain-profile tuck-notary`. After acceptance, staple the relevant app or DMG with `xcrun stapler staple <path>` before continuing subsequent targets.
+
+`make install` refuses to replace a running Tuck app. It does not force-quit the app or discard unsaved work. Installation into `/Applications` may require local administrator permissions.
+
+The selected royal-blue app icon source is `assets/icon.png`; `make icons` regenerates platform icons. Signed builds run this target automatically. `assets/icon.svg` retains the earlier waveform artwork as a legacy source.
