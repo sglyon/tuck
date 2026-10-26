@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+mod dictation_cleanup;
 mod coach;
 mod meeting_day;
 mod notion_setup;

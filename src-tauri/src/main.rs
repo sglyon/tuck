@@ -270,6 +270,7 @@ fn main() {
                         Some("starting") => Some("… Preparing"),
                         Some("listening") => Some("● Dictating"),
                         Some("processing") => Some("… Finishing"),
+                        Some("cleaning") => Some("… Formatting"),
                         Some("copied") => Some("✓ Copied"),
                         Some("paste_sent") => Some("✓ Dictated"),
                         Some("error") => Some("! Dictation"),

@@ -180,16 +180,22 @@ export interface EngineStatus {
   error?: string;
 }
 export interface GlobalDictationConfig {
+  cleanupEnabled: boolean;
+  cleanupPrompt: string;
   enabled: boolean;
   shortcut: string;
   autoPaste: boolean;
 }
 export interface GlobalDictationStatus {
+  cleanupEnabled?: boolean;
+  cleanupPrompt?: string;
+  cleanupDefaultPrompt?: string;
+  cleanupMessage?: string;
   enabled?: boolean;
   autoPaste?: boolean;
   shortcut: string;
   shortcutAvailable: boolean;
-  state: "idle" | "starting" | "listening" | "processing" | "copied" | "paste_sent" | "error";
+  state: "idle" | "starting" | "listening" | "processing" | "cleaning" | "copied" | "paste_sent" | "error";
   message?: string | null;
   meetingId?: string | null;
   pasteAvailable?: boolean;

@@ -25,7 +25,7 @@ impl State {
 // Active states stay visible; terminal feedback is brief, and idle stays hidden.
 fn lifetime(state: &str) -> Option<Option<Duration>> {
     match state {
-        "starting" | "listening" | "processing" => Some(None),
+        "starting" | "listening" | "processing" | "cleaning" => Some(None),
         "copied" | "paste_sent" => Some(Some(Duration::from_secs(3))),
         "error" => Some(Some(Duration::from_secs(7))),
         _ => None,
@@ -122,7 +122,7 @@ mod tests {
     }
     #[test]
     fn stays_for_capture_then_hides_after_results_and_errors() {
-        for state in ["starting", "listening", "processing"] {
+        for state in ["starting", "listening", "processing", "cleaning"] {
             assert_eq!(lifetime(state), Some(None));
         }
         for state in ["copied", "paste_sent"] {

@@ -1,5 +1,6 @@
 //! Portable meeting rules and workflows. Concrete platform adapters are wired by the host.
 pub mod domain;
+pub mod dictation_cleanup;
 pub mod library;
 pub mod meeting_day;
 pub mod ports;

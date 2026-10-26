@@ -189,3 +189,34 @@ fn dictation_backup_roundtrip_and_legacy_default_are_storage_independent() {
         assert_eq!(target.service.meeting(&legacy).unwrap()["kind"], "meeting");
     }
 }
+
+#[test]
+fn explicit_dictation_cleanup_preserves_evidence_and_rejects_rewrites_or_note_edits() {
+    for store in stores() {
+        let r = rig(store);
+        let text = "We agreed to ship on Friday.";
+        assert!(r.service.format_dictation(text, "Format paragraphs.").is_err());
+        let mut settings = call(&r.service, "get_settings", json!({}))["globalDictation"].clone();
+        settings["cleanupEnabled"] = json!(true);
+        call(&r.service, "update_settings", json!({"changes":{"globalDictation":settings}}));
+        let id = note(&r);
+        call(&r.service, "start_recording", json!({"meetingId":id}));
+        call(&r.service, "stop_recording", json!({"meetingId":id}));
+        *r.ai.answer.lock().unwrap() = "We agreed to ship\non Friday!".into();
+        let cleaned = r.service.format_dictation(text, "Use short paragraphs.").unwrap();
+        r.service.save_dictation_cleanup(&id, text, &cleaned).unwrap();
+        let saved = r.service.meeting(&id).unwrap();
+        assert_eq!(saved["notes"], cleaned);
+        assert_eq!(saved["segments"][0]["text"], text);
+        let request = r.ai.calls.lock().unwrap().last().unwrap().clone();
+        assert!(request.0.contains("Use short paragraphs."));
+        assert_eq!(request.1, vec![json!({"role":"user","content":text})]);
+        *r.ai.answer.lock().unwrap() = "We agreed to ship on Saturday.".into();
+        assert!(r.service.format_dictation(text, "Format paragraphs.").is_err());
+        assert!(r.service.save_dictation_cleanup(&id, text, &cleaned).is_err(), "must not overwrite edited notes");
+        let before = r.ai.calls.lock().unwrap().len();
+        call(&r.service, "update_settings", json!({"changes":{"provider":"openai","hostedConsent":false}}));
+        assert!(r.service.format_dictation(text, "Format paragraphs.").is_err());
+        assert_eq!(r.ai.calls.lock().unwrap().len(), before);
+    }
+}

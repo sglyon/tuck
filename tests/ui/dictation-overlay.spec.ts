@@ -34,7 +34,7 @@ test("floating feedback shows phases without mounting the workspace or capturing
   await expect(page.getByText("F20 to finish")).toBeVisible();
   await expect(page.getByRole("button")).toHaveCount(0);
   await expect(page.getByRole("navigation")).toHaveCount(0);
-  for (const [state, title] of [["starting", "Getting ready…"], ["processing", "Transcribing…"], ["copied", "Copied to clipboard"], ["paste_sent", "Paste sent"], ["error", "Dictation needs attention"]]) {
+  for (const [state, title] of [["starting", "Getting ready…"], ["processing", "Transcribing…"], ["cleaning", "Formatting…"], ["copied", "Copied to clipboard"], ["paste_sent", "Paste sent"], ["error", "Dictation needs attention"]]) {
     await page.evaluate(state => (window as any).__overlayStatus(state), state);
     await expect(page.getByRole("status")).toContainText(title);
     await expect(page.getByText("Private dictated text", { exact: false })).toHaveCount(0);

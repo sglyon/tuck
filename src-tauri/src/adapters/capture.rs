@@ -1224,6 +1224,19 @@ mod tests {
         assert!(cache.take(2).1.is_none(), "unload must reject late returns");
     }
     #[test]
+    #[ignore = "read-only device benchmark on the host; never opens audio"]
+    fn benchmark_dictation_readiness() {
+        let data = PathBuf::from(std::env::var_os("TUCK_BENCH_DATA").expect("Set TUCK_BENCH_DATA"));
+        let engine = CaptureEngine::new(data, PathBuf::new(), Arc::new(|_, _| {}));
+        let mut samples = Vec::new();
+        for _ in 0..5 {
+            let started = Instant::now();
+            engine.readiness_for_dictation().unwrap();
+            samples.push(started.elapsed().as_secs_f64() * 1000.0);
+        }
+        println!("read-only dictation device checks, milliseconds: {samples:?}");
+    }
+    #[test]
     #[ignore = "requires explicitly provisioned local speech weights; does not open the microphone"]
     fn benchmark_dictation_model_startup() {
         let data = PathBuf::from(std::env::var_os("TUCK_BENCH_DATA").expect("Set TUCK_BENCH_DATA to an existing model installation"));
@@ -1593,20 +1606,27 @@ impl CaptureEngine {
         self.readiness_for_sources(false)
     }
     fn readiness_for_sources(&self, system_audio: bool) -> Result<Value> {
-        let devices = capture_devices()?;
         let selected = lock(&self.devices).clone();
-        let mic_present = devices["microphones"].as_array().is_some_and(|v| {
-            v.iter()
-                .any(|d| selected.microphone.is_empty() || d["id"] == selected.microphone)
-        });
-        let system_present = devices["systemOutputs"].as_array().is_some_and(|v| {
-            v.iter()
-                .any(|d| selected.system.is_empty() || d["id"] == selected.system)
-        });
+        let (mic_present, system_present) = if system_audio {
+            let devices = capture_devices()?;
+            (
+                devices["microphones"].as_array().is_some_and(|v| v.iter().any(|d| selected.microphone.is_empty() || d["id"] == selected.microphone)),
+                devices["systemOutputs"].as_array().is_some_and(|v| v.iter().any(|d| selected.system.is_empty() || d["id"] == selected.system)),
+            )
+        } else {
+            // A shortcut needs identity/existence, not every device's display name.
+            let host = cpal::default_host();
+            let present = if selected.microphone.is_empty() {
+                host.default_input_device().is_some()
+            } else {
+                host.input_devices().map_err(|_| error("Microphones could not be listed."))?
+                    .any(|device| device.id().is_ok_and(|id| id.to_string() == selected.microphone))
+            };
+            (present, false)
+        };
         let model_ready = self.models.installed("parakeet");
         let helper_ready = !cfg!(target_os = "macos")
-            || (helper_path("tuck-calendar", "TUCK_CALENDAR_HELPER").is_ok()
-                && (!system_audio || helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok())
+            || ((!system_audio || (helper_path("tuck-calendar", "TUCK_CALENDAR_HELPER").is_ok() && helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok()))
                 && (!self.models.apple_installed()
                     || helper_path("tuck-speech", "TUCK_SPEECH_HELPER").is_ok()));
         let mut issues = vec![];
@@ -1624,8 +1644,12 @@ impl CaptureEngine {
         }
         // Status only: the helper must never request permission for readiness.
         #[cfg(target_os = "macos")]
-        let permissions = super::calendar::run_helper(if system_audio { "permissions" } else { "microphone-permission" }, &[], Duration::from_secs(3))
-            .unwrap_or_else(|_| json!({"microphone":"unknown","system":false}));
+        let permissions = if system_audio {
+            super::calendar::run_helper("permissions", &[], Duration::from_secs(3))
+                .unwrap_or_else(|_| json!({"microphone":"unknown","system":false}))
+        } else {
+            json!({"microphone":super::microphone_permission::status(),"system":false})
+        };
         #[cfg(not(target_os = "macos"))]
         let permissions = json!({"microphone":"unknown","system":true});
         if permissions["microphone"] != "authorized" && cfg!(target_os = "macos") {

@@ -349,7 +349,7 @@ fn dictation_preferences_survive_sqlite_reopen() {
     let data = tempfile::tempdir().unwrap();
     let observer = Arc::new(Mutex::new(None));
     let (app, capture) = service(data.path(), observer.clone());
-    let config = json!({"enabled":false,"shortcut":"Alt+Shift+D","autoPaste":false});
+    let config = json!({"enabled":false,"shortcut":"Alt+Shift+D","autoPaste":false,"cleanupEnabled":true,"cleanupPrompt":"Keep words and add paragraph breaks."});
     call(
         &app,
         "update_settings",

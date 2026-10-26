@@ -11,6 +11,13 @@ pub struct Config {
     pub enabled: bool,
     pub shortcut: String,
     pub auto_paste: bool,
+    #[serde(default)]
+    pub cleanup_enabled: bool,
+    #[serde(default = "default_cleanup_prompt")]
+    pub cleanup_prompt: String,
+}
+fn default_cleanup_prompt() -> String {
+    tuck_core::dictation_cleanup::DEFAULT_PROMPT.to_owned()
 }
 impl Default for Config {
     fn default() -> Self {
@@ -18,6 +25,8 @@ impl Default for Config {
             enabled: true,
             shortcut: crate::global_dictation::SHORTCUT.into(),
             auto_paste: true,
+            cleanup_enabled: false,
+            cleanup_prompt: default_cleanup_prompt(),
         }
     }
 }
@@ -25,6 +34,14 @@ impl Config {
     pub fn from_value(value: &Value) -> Result<Self> {
         let config: Self = serde_json::from_value(value.clone())
             .map_err(|_| AppError::invalid("Invalid dictation settings."))?;
+        if config.cleanup_prompt.trim().is_empty()
+            || config.cleanup_prompt.chars().count()
+                > tuck_core::dictation_cleanup::MAX_PROMPT_CHARS
+        {
+            return Err(AppError::invalid(
+                "Enter a cleanup prompt of 1–2,000 characters.",
+            ));
+        }
         if config.shortcut.len() > 100 {
             return Err(AppError::invalid("The shortcut is too long."));
         }

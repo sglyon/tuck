@@ -24,6 +24,11 @@ pub trait Application: Send + Sync {
     fn create(&self) -> Result<String>;
     fn start(&self, id: &str) -> Result<()>;
     fn stop(&self, id: &str) -> Result<Value>;
+    fn cleanup(&self, _text: &str, _prompt: &str) -> Result<String> {
+        Err(AppError::unavailable("Cleanup is unavailable."))
+    }
+    fn save_cleanup(&self, _id: &str, _original: &str, _cleaned: &str) -> Result<()> { Ok(()) }
+
 }
 pub struct NativeApplication {
     pub service: Arc<MeetingService>,
@@ -48,6 +53,22 @@ impl Application for NativeApplication {
         } else {
             Err(AppError::unavailable("Set up the speech model and microphone in Settings → Audio & models before dictating. Nothing has started."))
         }
+    }
+    fn cleanup(&self, text: &str, prompt: &str) -> Result<String> {
+        // Wall-clock cap includes credential refresh as well as HTTP inference.
+        // The adapter uses a non-queuing gate and a five-second network timeout.
+        let service = self.service.clone();
+        let text = text.to_owned();
+        let prompt = prompt.to_owned();
+        let (send, receive) = std::sync::mpsc::sync_channel(1);
+        std::thread::Builder::new().name("tuck-dictation-cleanup".into()).spawn(move || {
+            let _ = send.send(service.format_dictation(&text, &prompt));
+        }).map_err(|_| AppError::unavailable("Cleanup could not start."))?;
+        receive.recv_timeout(std::time::Duration::from_secs(6))
+            .map_err(|_| AppError::unavailable("Cleanup took too long."))?
+    }
+    fn save_cleanup(&self, id: &str, original: &str, cleaned: &str) -> Result<()> {
+        self.service.save_dictation_cleanup(id, original, cleaned)
     }
     fn create(&self) -> Result<String> {
         self.service.handle("create_dictation", json!({}))?["id"]
@@ -80,6 +101,7 @@ struct Session {
 struct State {
     phase: &'static str,
     message: String,
+    cleanup_message: String,
     meeting_id: Option<String>,
     session: Option<Session>,
     shortcut_available: bool,
@@ -92,6 +114,7 @@ impl Default for State {
         Self {
             phase: "idle",
             message: String::new(),
+            cleanup_message: String::new(),
             meeting_id: None,
             session: None,
             shortcut_available: false,
@@ -130,6 +153,10 @@ impl GlobalDictation {
         result["shortcut"] = json!(s.config.shortcut);
         result["enabled"] = json!(s.config.enabled);
         result["autoPaste"] = json!(s.config.auto_paste);
+        result["cleanupEnabled"] = json!(s.config.cleanup_enabled);
+        result["cleanupPrompt"] = json!(s.config.cleanup_prompt);
+        result["cleanupDefaultPrompt"] = json!(tuck_core::dictation_cleanup::DEFAULT_PROMPT);
+        result["cleanupMessage"] = json!(s.cleanup_message);
         result["pasteAvailable"] = json!(s.config.auto_paste && result["pasteAvailable"] == true);
         result["shortcutAvailable"] = json!(s.shortcut_available);
         result["state"] = json!(s.phase);
@@ -294,6 +321,7 @@ impl GlobalDictation {
             if self.app.active()?.is_some() {
                 return Err(AppError::invalid("Finish the current recording before dictating. Its recording has not been changed."));
             }
+            self.state.lock().unwrap_or_else(|p| p.into_inner()).cleanup_message.clear();
             self.phase("starting", "Preparing your microphone…");
             self.app.ready()?;
             if !self.allowed(generation) {
@@ -371,13 +399,33 @@ impl GlobalDictation {
                 self.phase("idle", "Voice note saved without copying or inserting.");
                 return Ok(());
             }
-            let text = completed_speech(&completed)?;
+            let mut text = completed_speech(&completed)?;
             if text.is_empty() {
                 self.phase(
                     "idle",
                     "No speech was recognized. Your clipboard has not been changed.",
                 );
                 return Ok(());
+            }
+            let config = self.configuration();
+            if config.cleanup_enabled {
+                self.phase("cleaning", "Adding punctuation and formatting while preserving your words…");
+                let cleaned = self.app.cleanup(&text, &config.cleanup_prompt)
+                    .and_then(|candidate| tuck_core::dictation_cleanup::validate(&text, &candidate));
+                if !self.allowed(generation) { return Ok(()); }
+                match cleaned {
+                    Ok(candidate) => {
+                        if self.app.save_cleanup(&session.id, &text, &candidate).is_ok() {
+                            text = candidate;
+                        } else {
+                            self.state.lock().unwrap_or_else(|p| p.into_inner()).cleanup_message = "Original transcript kept because the saved note changed.".into();
+                        }
+                    }
+                    Err(error) => {
+                        let detail: String = error.message.chars().take(240).collect();
+                        self.state.lock().unwrap_or_else(|p| p.into_inner()).cleanup_message = format!("Original transcript kept. {detail}");
+                    }
+                }
             }
             let outcome = self
                 .delivery
@@ -513,9 +561,25 @@ mod tests {
         on_start: Mutex<Option<Box<dyn Fn() + Send>>>,
         stop_fails: AtomicBool,
         complete: Mutex<Value>,
+        cleanup_text: Mutex<Option<String>>,
+        cleanup_drain: Drain,
+        cleanup_saves: Mutex<Vec<String>>,
         drain: Drain,
     }
     impl Application for FakeApp {
+        fn cleanup(&self, _: &str, _: &str) -> Result<String> {
+            self.log.lock().unwrap().push("cleanup");
+            let mut held = self.cleanup_drain.held.lock().unwrap();
+            if *held {
+                if let Some(entered) = self.cleanup_drain.entered.lock().unwrap().take() { let _ = entered.send(()); }
+                while *held { held = self.cleanup_drain.wake.wait(held).unwrap(); }
+            }
+            self.cleanup_text.lock().unwrap().clone().ok_or_else(|| AppError::unavailable("AI unavailable"))
+        }
+        fn save_cleanup(&self, _: &str, _: &str, cleaned: &str) -> Result<()> {
+            self.cleanup_saves.lock().unwrap().push(cleaned.to_owned());
+            Ok(())
+        }
         fn active(&self) -> Result<Option<String>> {
             Ok(self.active.lock().unwrap().clone())
         }
@@ -607,6 +671,9 @@ mod tests {
             complete: Mutex::new(
                 json!({"id":"voice-note","kind":"dictation","status":"complete","notes":"Typed notes must not be inserted","segments":[{"start":3.,"text":"corrected text","originalText":"final speech"},{"start":0.,"text":"Hello"}]}),
             ),
+            cleanup_text: Mutex::new(None),
+            cleanup_drain: Drain::default(),
+            cleanup_saves: Mutex::new(Vec::new()),
             drain: Drain::default(),
         });
         let delivery = Arc::new(FakeDelivery {
@@ -623,6 +690,48 @@ mod tests {
     fn start(controller: &GlobalDictation) {
         let target = controller.prepare_target().unwrap();
         assert_eq!(controller.toggle(target).unwrap()["state"], "listening");
+    }
+    #[test]
+    fn cleanup_is_opt_in_and_word_changes_fall_back_to_original_delivery() {
+        for candidate in [Some("Hello, final speech!"), Some("Hello invented words"), None] {
+            let (c, app, delivery) = setup();
+            c.configure(crate::dictation_config::Config { cleanup_enabled: true, ..Default::default() }, |_, _| Ok(true)).unwrap();
+            *app.cleanup_text.lock().unwrap() = candidate.map(str::to_owned);
+            start(&c);
+            let status = c.toggle(c.prepare_target().unwrap()).unwrap();
+            let expected = if candidate == Some("Hello, final speech!") { "Hello, final speech!" } else { "Hello final speech" };
+            assert_eq!(*delivery.copies.lock().unwrap(), vec![expected]);
+            assert_eq!(app.cleanup_saves.lock().unwrap().len(), usize::from(candidate == Some("Hello, final speech!")));
+            assert_eq!(status["cleanupMessage"].as_str().unwrap().is_empty(), candidate == Some("Hello, final speech!"));
+        }
+        let (c, app, _) = setup();
+        start(&c);
+        c.toggle(c.prepare_target().unwrap()).unwrap();
+        assert!(!app.log.lock().unwrap().contains(&"cleanup"));
+    }
+    #[test]
+    fn cancellation_during_cleanup_prevents_late_save_copy_and_paste() {
+        let (c, app, delivery) = setup();
+        c.configure(crate::dictation_config::Config { cleanup_enabled: true, ..Default::default() }, |_, _| Ok(true)).unwrap();
+        *app.cleanup_text.lock().unwrap() = Some("Hello, final speech!".into());
+        start(&c);
+        *app.cleanup_drain.held.lock().unwrap() = true;
+        let (entered, wait) = mpsc::channel();
+        *app.cleanup_drain.entered.lock().unwrap() = Some(entered);
+        let stopping = c.clone();
+        let finish = thread::spawn(move || stopping.toggle(stopping.prepare_target().unwrap()));
+        wait.recv_timeout(Duration::from_secs(2)).unwrap();
+        let cancelling = c.clone();
+        let cancel = thread::spawn(move || cancelling.cancel());
+        let until = Instant::now() + Duration::from_secs(2);
+        while c.generation.load(Ordering::Acquire) == 0 && Instant::now() < until { thread::yield_now(); }
+        assert_ne!(c.generation.load(Ordering::Acquire), 0);
+        *app.cleanup_drain.held.lock().unwrap() = false;
+        app.cleanup_drain.wake.notify_all();
+        finish.join().unwrap().unwrap();
+        cancel.join().unwrap().unwrap();
+        assert!(delivery.copies.lock().unwrap().is_empty());
+        assert!(app.cleanup_saves.lock().unwrap().is_empty());
     }
     #[test]
     fn disabled_dictation_never_captures_a_target_or_starts_audio() {

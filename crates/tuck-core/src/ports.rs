@@ -38,6 +38,11 @@ pub trait RecordingPort: Send + Sync {
     ) -> Result<f64>;
 }
 pub trait IntelligencePort: Send + Sync {
+    /// Short, tool-free formatting request. Implementations must bound latency.
+    fn complete_dictation(&self, _settings: &Value, _system: &str, _messages: &[Value]) -> Result<String> {
+        Err(AppError::unavailable("Dictation cleanup is unavailable with this AI provider."))
+    }
+
     /// Background-only completion. Adapters must cap context/output/latency and disable tools.
     /// Fail closed unless the host implements the low-resource policy explicitly.
     fn complete_coach(

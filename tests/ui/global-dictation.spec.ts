@@ -116,7 +116,7 @@ test("dictation preferences save, disable capture, restore defaults and preserve
   await area.getByRole("button",{name:"Save dictation settings"}).click();
   await expect(area.getByText("Dictation settings saved on this device.")).toBeVisible();
   await expect(area.locator("kbd")).toHaveText(/Option \+ Shift \+ D|Alt \+ Shift \+ D/);
-  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure").at(-1).params)).toEqual({enabled:true,shortcut:"Alt+Shift+D",autoPaste:false});
+  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure").at(-1).params)).toEqual(expect.objectContaining({enabled:true,shortcut:"Alt+Shift+D",autoPaste:false,cleanupEnabled:false}));
   await area.getByRole("switch",{name:/Enable dictation anywhere/}).uncheck();
   await area.getByRole("button",{name:"Save dictation settings"}).click();
   await expect(area.getByRole("button",{name:"Start dictation here"})).toBeDisabled();
@@ -182,4 +182,42 @@ test("F20 can be recorded and saved without a modifier",async({page})=>{
   await expect(area.getByText("Dictation settings saved on this device.")).toBeVisible();
   await expect(area.locator("kbd")).toHaveText("F20");
   expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure").at(-1).params.shortcut)).toBe("F20");
+});
+
+test("cleanup prompt is opt-in, saved explicitly and locked while formatting",async({page})=>{
+  await fixture(page); await settings(page);
+  const area=region(page);
+  await expect(area.getByRole("switch",{name:/Format dictated text with AI/})).not.toBeChecked();
+  await expect(area.getByRole("textbox",{name:"Cleanup prompt"})).toHaveCount(0);
+  await area.getByRole("switch",{name:/Format dictated text with AI/}).check();
+  await area.getByRole("textbox",{name:"Cleanup prompt"}).fill("Add paragraph breaks and keep every spoken word.");
+  expect((await calls(page)).filter((call:any)=>call.method==="global_dictation_configure")).toHaveLength(0);
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByText("Dictation settings saved on this device.")).toBeVisible();
+  const prefs=await page.evaluate(()=>(window as any).__dictationCalls.filter((call:any)=>call.method==="global_dictation_configure").at(-1).params);
+  expect(prefs.cleanupEnabled).toBe(true);
+  expect(prefs.cleanupPrompt).toBe("Add paragraph breaks and keep every spoken word.");
+  await page.evaluate(()=>(window as any).__globalStatus({state:"cleaning"}));
+  await expect(area.getByRole("textbox",{name:"Cleanup prompt"})).toBeDisabled();
+  await expect(area.getByRole("button",{name:"Start dictation here"})).toBeDisabled();
+  await expect(indicator(page).getByText("Formatting your words…")).toBeVisible();
+  await page.evaluate(()=>(window as any).__globalStatus({state:"copied",cleanupMessage:"Original transcript kept: cleanup would change words."}));
+  await expect(area.getByText("Original transcript kept: cleanup would change words.")).toBeVisible();
+  await area.getByRole("button",{name:"Reset cleanup prompt"}).click();
+  await expect(area.getByRole("textbox",{name:"Cleanup prompt"})).toHaveValue(/Clean up punctuation/);
+  await area.getByRole("button",{name:"Restore defaults"}).click();
+  await expect(area.getByRole("switch",{name:/Format dictated text with AI/})).not.toBeChecked();
+});
+
+test("cleanup settings desktop and compact evidence",async({page})=>{
+  test.skip(!process.env.TUCK_CAPTURE_GLOBAL_DICTATION,"Run explicitly for bounded visual verification.");
+  await fixture(page); await settings(page);
+  const area=region(page);
+  await area.getByRole("switch",{name:/Format dictated text with AI/}).check();
+  for(const width of [1320,390]) {
+    await page.setViewportSize({width,height:1000});
+    await area.getByRole("textbox",{name:"Cleanup prompt"}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:`.impeccable/review/dictation-cleanup-${width}.png`});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }
 });

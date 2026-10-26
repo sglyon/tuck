@@ -204,3 +204,5 @@ Dictation anywhere settings use explicit Save, with enable, recorded shortcut, a
 Function keys F1–F24 may be used without modifiers; ordinary typing keys require Command, Control, or Option/Alt. The dictation shortcut uses an explicit key-chord recorder with Escape/blur cancellation, inline validation, and Save to apply. Existing native dictation and meeting shortcuts are routed to the recorder while it is active in the focused app.
 
 Global dictation shows a read-only, click-through floating indicator at the bottom of the current screen. It never takes keyboard focus. Preparing, Listening and Transcribing stay visible; Copied/Paste sent disappears after three seconds, errors after seven. No dictated text is shown.
+
+AI formatting in dictation settings is opt-in, uses an explicitly saved editable prompt, and displays immutable word-preservation rules. Formatting is a distinct active phase; save/shortcut controls stay locked until delivery ends. Fallbacks name why the original was kept.

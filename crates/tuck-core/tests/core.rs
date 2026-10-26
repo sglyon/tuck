@@ -183,6 +183,10 @@ struct AI {
     fail: Mutex<bool>,
 }
 impl IntelligencePort for AI {
+    fn complete_dictation(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
+        self.complete(settings, system, messages, &mut |_| {})
+    }
+
     fn complete_coach(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
         self.complete(settings, system, messages, &mut |_| {})
     }

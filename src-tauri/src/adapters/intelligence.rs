@@ -59,16 +59,19 @@ const COACH_RESPONSE_BYTES: u64 = 65_536;
 const COACH_OUTPUT_CHARS: usize = 3_000;
 const COACH_TIMEOUT: Duration = Duration::from_secs(20);
 fn coach_response(response: Response, local: bool) -> Result<String> {
+    bounded_response(response, local, COACH_OUTPUT_CHARS, COACH_RESPONSE_BYTES)
+}
+fn bounded_response(response: Response, local: bool, max_chars: usize, max_bytes: u64) -> Result<String> {
     let mut bytes = Vec::new();
     checked(response)?
-        .take(COACH_RESPONSE_BYTES + 1)
+        .take(max_bytes + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| {
             error(
                 "The agent check was interrupted. Recording continues; Tuck will try again later.",
             )
         })?;
-    if bytes.len() as u64 > COACH_RESPONSE_BYTES {
+    if bytes.len() as u64 > max_bytes {
         return Err(error(
             "The agent provider returned too much data. Try a smaller model response.",
         ));
@@ -78,7 +81,7 @@ fn coach_response(response: Response, local: bool) -> Result<String> {
     } else {
         consume_sse(Cursor::new(bytes), &mut |_| {})?
     };
-    if answer.chars().count() > COACH_OUTPUT_CHARS {
+    if answer.chars().count() > max_chars {
         return Err(error(
             "The agent response was too long. Tuck will check again later.",
         ));
@@ -453,11 +456,15 @@ impl IntelligencePort for Intelligence {
         messages: &[Value],
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String> {
-        self.complete_with_policy(settings, system, messages, on_delta, false)
+        self.complete_with_policy(settings, system, messages, on_delta, false, false)
     }
     fn complete_coach(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
-        self.complete_with_policy(settings, system, messages, &mut |_| {}, true)
+        self.complete_with_policy(settings, system, messages, &mut |_| {}, true, false)
     }
+    fn complete_dictation(&self, settings: &Value, system: &str, messages: &[Value]) -> Result<String> {
+        self.complete_with_policy(settings, system, messages, &mut |_| {}, false, true)
+    }
+
 }
 impl Intelligence {
     fn complete_with_policy(
@@ -467,14 +474,16 @@ impl Intelligence {
         messages: &[Value],
         on_delta: &mut dyn FnMut(&str),
         coach: bool,
+        cleanup: bool,
     ) -> Result<String> {
-        let _request = self.inference.enter(coach)?;
-        if coach
+        let background = coach || cleanup;
+        let _request = self.inference.enter(background)?;
+        if background
             && system.len()
                 + serde_json::to_vec(messages)
                     .map_err(|_| error("Invalid agent context."))?
                     .len()
-                > COACH_INPUT_BYTES
+                > if cleanup { 24_000 } else { COACH_INPUT_BYTES }
         {
             return Err(error("The selected agent instructions are too long. Shorten them or choose fewer agents."));
         }
@@ -495,7 +504,7 @@ impl Intelligence {
             return Err(error("Enter a question first."));
         }
         if provider == "local" {
-            if !coach && settings["webSearch"] == true {
+            if !background && settings["webSearch"] == true {
                 return Err(error(
                     "Web lookup needs a hosted AI provider. Turn it off to use local AI.",
                 ));
@@ -509,7 +518,7 @@ impl Intelligence {
             history.extend(messages);
             // Leave CPU headroom for speech processing and an active video call.
             // Model size/GPU memory remain the user's selected model's responsibility.
-            let body = json!({"model":model,"messages":history,"stream":true,"think":false,"keep_alive":"2m","options":{"num_ctx":16384,"num_thread":2,"num_predict":if coach {1200} else {4096}}});
+            let body = json!({"model":model,"messages":history,"stream":true,"think":false,"keep_alive":"2m","options":{"num_ctx":16384,"num_thread":2,"num_predict":if cleanup {2048} else if coach {1200} else {4096}}});
             let response = self
                 .client
                 .post(
@@ -517,7 +526,9 @@ impl Intelligence {
                         .join("api/chat")
                         .map_err(|_| error("Invalid local AI endpoint."))?,
                 )
-                .timeout(if coach {
+                .timeout(if cleanup {
+                    Duration::from_secs(5)
+                } else if coach {
                     COACH_TIMEOUT
                 } else {
                     Duration::from_secs(180)
@@ -530,7 +541,9 @@ impl Intelligence {
             if response.status().as_u16() == 404 {
                 return Err(error("This local model is not installed. Install it in Ollama, then load models in Settings."));
             }
-            return if coach {
+            return if cleanup {
+                bounded_response(response, true, tuck_core::dictation_cleanup::MAX_OUTPUT_CHARS, 524_288)
+            } else if coach {
                 coach_response(response, true)
             } else {
                 consume_local(BufReader::new(checked(response)?), on_delta)
@@ -551,18 +564,21 @@ impl Intelligence {
                 .get("openai")?
                 .ok_or_else(|| error("Add your OpenAI API key in Settings first."))?
         };
-        let body = hosted_body(
+        let mut body = hosted_body(
             model,
             system,
             &messages,
-            !coach && settings["webSearch"] == true,
+            !background && settings["webSearch"] == true,
             coach,
         );
+        if cleanup { body["max_output_tokens"] = json!(2048); }
         let response = self
             .client
             .post(format!("{RESOURCE}/responses"))
             .bearer_auth(token)
-            .timeout(if coach {
+            .timeout(if cleanup {
+                Duration::from_secs(5)
+            } else if coach {
                 COACH_TIMEOUT
             } else {
                 Duration::from_secs(180)
@@ -572,7 +588,9 @@ impl Intelligence {
             .map_err(|_| {
                 error("The AI connection was interrupted. Your transcript is saved; try again.")
             })?;
-        if coach {
+        if cleanup {
+            bounded_response(response, false, tuck_core::dictation_cleanup::MAX_OUTPUT_CHARS, 524_288)
+        } else if coach {
             coach_response(response, false)
         } else {
             consume_sse(BufReader::new(checked(response)?), on_delta)
@@ -807,6 +825,32 @@ mod coach_tests {
             secrets,
         )
         .unwrap()
+    }
+    #[test]
+    fn dictation_cleanup_uses_small_tool_free_requests_and_does_not_queue() {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", server.server_addr().to_ip().unwrap());
+        let worker = thread::spawn(move || {
+            let mut request = server.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+            let mut raw = String::new();
+            request.as_reader().read_to_string(&mut raw).unwrap();
+            let body: Value = serde_json::from_str(&raw).unwrap();
+            request.respond(tiny_http::Response::from_string("{\"message\":{\"content\":\"Hello, world!\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}\n")).unwrap();
+            body
+        });
+        let data = tempfile::tempdir().unwrap();
+        let ai = adapter(data.path());
+        let settings = json!({"provider":"local","model":"fast-model","localUrl":endpoint,"webSearch":true});
+        assert_eq!(ai.complete_dictation(&settings, "Preserve every word.", &[json!({"role":"user","content":"hello world"})]).unwrap(), "Hello, world!");
+        let body = worker.join().unwrap();
+        assert_eq!(body["model"], "fast-model");
+        assert_eq!(body["think"], false);
+        assert_eq!(body["options"]["num_predict"], 2048);
+        assert!(body.get("tools").is_none());
+        let held = ai.inference.enter(false).unwrap();
+        assert_eq!(ai.complete_dictation(&settings, "Rules", &[json!({"role":"user","content":"hello"})]).unwrap_err().code, "intelligence_busy");
+        drop(held);
+        assert!(ai.complete_dictation(&json!({"provider":"openai","model":"fast-model","hostedConsent":false}), "Rules", &[json!({"role":"user","content":"hello"})]).is_err());
     }
     #[test]
     fn background_cannot_enable_tools_or_provider_storage() {

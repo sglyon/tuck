@@ -15,3 +15,6 @@ pub mod notion_auth;
 pub mod playback;
 pub mod secrets;
 pub mod speech;
+
+#[cfg(target_os = "macos")]
+pub mod microphone_permission;

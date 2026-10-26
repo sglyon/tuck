@@ -29,13 +29,14 @@ export default function DictationOverlay() {
     return () => { live = false; unlisten?.(); document.documentElement.classList.remove("dictation-overlay-window"); };
   }, []);
   if (!status || status.state === "idle") return null;
-  const finishing = status.state === "starting" || status.state === "processing";
+  const finishing = status.state === "starting" || status.state === "processing" || status.state === "cleaning";
   const failed = status.state === "error";
   const listening = status.state === "listening";
-  const title = { starting: "Getting ready…", listening: "Listening", processing: "Transcribing…", copied: "Copied to clipboard", paste_sent: "Paste sent", error: "Dictation needs attention" }[status.state];
+  const title = { starting: "Getting ready…", listening: "Listening", processing: "Transcribing…", cleaning: "Formatting…", copied: "Copied to clipboard", paste_sent: "Paste sent", error: "Dictation needs attention" }[status.state];
   const detail = listening ? `${shortcutLabel(status.shortcut, /Mac/.test(navigator.platform))} to finish`
     : status.state === "copied" ? "Your words are ready to paste."
     : status.state === "paste_sent" ? "Your words are also on the clipboard."
+    : status.state === "cleaning" ? "Preserving your words."
     : failed ? "Open Tuck for details."
     : status.state === "starting" ? "Preparing your microphone." : "Finishing on this device.";
   const Icon = finishing ? LoaderCircle : failed ? CircleAlert : listening ? Mic : Check;
