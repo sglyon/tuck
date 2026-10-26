@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, native } from "./bridge";
-import type { GlobalDictationStatus } from "./types";
+import type { GlobalDictationConfig, GlobalDictationStatus } from "./types";
 
 export function useGlobalDictation() {
   const [status, setStatus] = useState<GlobalDictationStatus | null>(null);
@@ -9,7 +9,7 @@ export function useGlobalDictation() {
   const [dismissed, setDismissed] = useState(false);
   const mounted = useRef(true);
   const revision = useRef(0);
-  const flight = useRef<Promise<void> | null>(null);
+  const flight = useRef<Promise<boolean> | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -23,19 +23,21 @@ export function useGlobalDictation() {
       setDismissed(false);
     }
   }, []);
-  const run = useCallback((method: string): Promise<void> => {
-    if (!native) return Promise.resolve();
+  const run = useCallback((method: string, params?: GlobalDictationConfig): Promise<boolean> => {
+    if (!native) return Promise.resolve(false);
     if (flight.current) return flight.current;
     const stamp = revision.current;
     setPending(method);
     setError("");
     const task = (async () => {
       try {
-        const next = await call<GlobalDictationStatus>(method);
+        const next = await call<GlobalDictationStatus>(method, params ? {...params} : undefined);
         if (!next || typeof next.state !== "string") throw new Error("Global dictation is unavailable in this desktop build.");
         if (mounted.current && revision.current === stamp) receive(next);
+        return true;
       } catch (e) {
-        if (mounted.current && revision.current === stamp) setError(e instanceof Error ? e.message : String(e));
+        if (mounted.current && (method === "global_dictation_configure" || revision.current === stamp)) setError(e instanceof Error ? e.message : String(e));
+        return false;
       } finally {
         if (mounted.current) setPending("");
       }
@@ -44,9 +46,10 @@ export function useGlobalDictation() {
     void task.then(() => { if (flight.current === task) flight.current = null; });
     return task;
   }, [receive]);
-  const refresh = useCallback(() => run("global_dictation_status"), [run]);
-  const toggle = useCallback(() => run("global_dictation_toggle"), [run]);
-  const cancel = useCallback(() => run("global_dictation_cancel"), [run]);
-  return { status, pending, error, dismissed, receive, refresh, toggle, cancel, dismiss: () => setDismissed(true) };
+  const refresh = useCallback(async () => { await run("global_dictation_status"); }, [run]);
+  const toggle = useCallback(async () => { await run("global_dictation_toggle"); }, [run]);
+  const cancel = useCallback(async () => { await run("global_dictation_cancel"); }, [run]);
+  const configure = useCallback((config: GlobalDictationConfig) => run("global_dictation_configure", config), [run]);
+  return { status, pending, error, dismissed, receive, refresh, toggle, cancel, configure, dismiss: () => setDismissed(true) };
 }
 export type GlobalDictationController = ReturnType<typeof useGlobalDictation>;

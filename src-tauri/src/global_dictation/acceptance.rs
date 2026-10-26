@@ -343,3 +343,20 @@ fn global_dictation_real_core_refuses_an_existing_meeting_without_stopping_or_co
     call(&service, "shutdown", json!({}));
     assert_eq!(service.meeting(id).unwrap()["status"], "interrupted");
 }
+
+#[test]
+fn dictation_preferences_survive_sqlite_reopen() {
+    let data = tempfile::tempdir().unwrap();
+    let observer = Arc::new(Mutex::new(None));
+    let (app, capture) = service(data.path(), observer.clone());
+    let config = json!({"enabled":false,"shortcut":"Alt+Shift+D","autoPaste":false});
+    call(
+        &app,
+        "update_settings",
+        json!({"changes":{"globalDictation":config}}),
+    );
+    drop(app);
+    drop(capture);
+    let (app, _) = service(data.path(), observer);
+    assert_eq!(app.get_settings().unwrap()["globalDictation"], config);
+}

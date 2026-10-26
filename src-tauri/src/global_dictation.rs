@@ -83,6 +83,7 @@ struct State {
     meeting_id: Option<String>,
     session: Option<Session>,
     shortcut_available: bool,
+    config: crate::dictation_config::Config,
     prepared: Option<u64>,
     prepared_target: Option<DictationTarget>,
 }
@@ -94,6 +95,7 @@ impl Default for State {
             meeting_id: None,
             session: None,
             shortcut_available: false,
+            config: crate::dictation_config::Config::default(),
             prepared: None,
             prepared_target: None,
         }
@@ -125,12 +127,52 @@ impl GlobalDictation {
     pub fn status(&self) -> Value {
         let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let mut result = self.delivery.status();
-        result["shortcut"] = json!(SHORTCUT);
+        result["shortcut"] = json!(s.config.shortcut);
+        result["enabled"] = json!(s.config.enabled);
+        result["autoPaste"] = json!(s.config.auto_paste);
+        result["pasteAvailable"] = json!(s.config.auto_paste && result["pasteAvailable"] == true);
         result["shortcutAvailable"] = json!(s.shortcut_available);
         result["state"] = json!(s.phase);
         result["message"] = json!(s.message);
         result["meetingId"] = json!(s.meeting_id);
         result
+    }
+    pub fn configuration(&self) -> crate::dictation_config::Config {
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .config
+            .clone()
+    }
+    /// Keep settings stable from target capture through completion and delivery.
+    pub fn configure(
+        &self,
+        config: crate::dictation_config::Config,
+        apply: impl FnOnce(
+            &crate::dictation_config::Config,
+            &crate::dictation_config::Config,
+        ) -> Result<bool>,
+    ) -> Result<Value> {
+        let _operation = self
+            .operation
+            .try_lock()
+            .map_err(|_| AppError::unavailable("Finish dictation before changing its settings."))?;
+        let old = {
+            let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            if self.closing.load(Ordering::Acquire) || s.session.is_some() || s.prepared.is_some() {
+                return Err(AppError::unavailable(
+                    "Finish dictation before changing its settings.",
+                ));
+            }
+            s.config.clone()
+        };
+        let available = apply(&old, &config)?;
+        {
+            let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            s.config = config;
+            s.shortcut_available = available;
+        }
+        Ok(self.changed())
     }
     fn changed(&self) -> Value {
         let status = self.status();
@@ -166,6 +208,12 @@ impl GlobalDictation {
         if self.closing.load(Ordering::Acquire) {
             return Err(AppError::unavailable("Tuck is closing."));
         }
+        let config = self.configuration();
+        if !config.enabled {
+            return Err(AppError::unavailable(
+                "Dictation anywhere is off. Turn it on in Settings → Audio & models.",
+            ));
+        }
         let generation = self.generation.load(Ordering::Acquire);
         let starting = {
             let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -177,7 +225,11 @@ impl GlobalDictation {
             s.session.is_none()
         };
         let target = if starting {
-            Some(self.delivery.capture_target()?)
+            Some(if config.auto_paste {
+                self.delivery.capture_target()?
+            } else {
+                DictationTarget::none()
+            })
         } else {
             None
         };
@@ -333,7 +385,9 @@ impl GlobalDictation {
             if outcome.paste_attempted {
                 self.phase("paste_sent", "Copied. Paste sent to your text field.");
             } else if outcome.copied {
+                let config = self.configuration();
                 let message = match outcome.reason.as_str() {
+                    _ if !config.auto_paste => "Copied. Paste your words wherever you need them.",
                     "permission_denied" | "accessibility_denied" | "accessibility_permission" => "Copied. Allow Tuck in Accessibility settings for automatic insertion.",
                     "unsupported" | "unsupported_platform" | "paste_unsupported" => "Copied. Automatic insertion is not available on this platform yet.",
                     _ => "Copied. Automatic insertion was skipped because the original text field could not be confirmed. Paste when you are ready.",
@@ -569,6 +623,66 @@ mod tests {
     fn start(controller: &GlobalDictation) {
         let target = controller.prepare_target().unwrap();
         assert_eq!(controller.toggle(target).unwrap()["state"], "listening");
+    }
+    #[test]
+    fn disabled_dictation_never_captures_a_target_or_starts_audio() {
+        let (c, app, delivery) = setup();
+        let config = crate::dictation_config::Config {
+            enabled: false,
+            ..Default::default()
+        };
+        c.configure(config, |_, _| Ok(false)).unwrap();
+        assert!(c.prepare_target().is_err());
+        assert_eq!(app.creates.load(Ordering::Relaxed), 0);
+        assert!(delivery.log.lock().unwrap().is_empty());
+        assert_eq!(c.status()["enabled"], false);
+    }
+    #[test]
+    fn clipboard_only_does_not_inspect_a_target_and_active_config_is_stable() {
+        let (c, _, delivery) = setup();
+        let config = crate::dictation_config::Config {
+            auto_paste: false,
+            ..Default::default()
+        };
+        c.configure(config.clone(), |_, _| Ok(true)).unwrap();
+        let prepared = c.prepare_target().unwrap();
+        assert!(c
+            .configure(Default::default(), |_, _| panic!(
+                "must not save while prepared"
+            ))
+            .is_err());
+        c.toggle(prepared).unwrap();
+        assert!(c
+            .configure(Default::default(), |_, _| panic!(
+                "must not save during capture"
+            ))
+            .is_err());
+        assert_eq!(c.configuration(), config);
+        c.toggle(c.prepare_target().unwrap()).unwrap();
+        assert!(!delivery.log.lock().unwrap().contains(&"target"));
+        assert_eq!(
+            delivery.copies.lock().unwrap().as_slice(),
+            ["Hello final speech"]
+        );
+        assert_eq!(
+            c.status()["message"],
+            "Copied. Paste your words wherever you need them."
+        );
+    }
+    #[test]
+    fn a_failed_configuration_apply_does_not_change_current_status() {
+        let (c, _, _) = setup();
+        let before = c.configuration();
+        assert!(c
+            .configure(
+                crate::dictation_config::Config {
+                    enabled: false,
+                    ..Default::default()
+                },
+                |_, _| Err(AppError::unavailable("conflict"))
+            )
+            .is_err());
+        assert_eq!(c.configuration(), before);
     }
     #[test]
     fn prepared_actions_are_single_use_and_cannot_start_after_cancel() {

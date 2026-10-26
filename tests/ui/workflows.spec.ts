@@ -22,6 +22,10 @@ test("organization filters and source search lead back to exact spoken evidence"
     .fill("Maya");
   await page.getByRole("textbox", { name: "Conversation title" }).focus();
   await page
+    .getByRole("button", { name: "Search library", exact: true })
+    .click();
+
+  await page
     .getByText("Filter by folder, tag or person", { exact: false })
     .click();
   await page
@@ -33,9 +37,6 @@ test("organization filters and source search lead back to exact spoken evidence"
   await page
     .getByLabel("Filter by person", { exact: true })
     .selectOption("Maya");
-  await page
-    .getByRole("button", { name: "Ask your library", exact: true })
-    .click();
   await page
     .getByRole("textbox", { name: "Search or ask your library" })
     .fill("custom integration");
@@ -63,7 +64,7 @@ test("meeting commitments persist and are actionable from the task inbox", async
     page.getByRole("checkbox", { name: "Complete Send the rollout plan" }),
   ).not.toBeChecked();
   await page
-    .getByRole("navigation", { name: "Library filters" })
+    .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: /^Tasks/ })
     .click();
   await expect(
@@ -111,6 +112,7 @@ test("custom templates and writing recipes are editable and reachable in a meeti
     .getByRole("textbox", { name: "recipe instructions", exact: true })
     .fill("Draft a brief follow-up email with agreed next steps.");
   await page.getByRole("button", { name: "Save recipe", exact: true }).click();
+  await page.getByRole("navigation", {name:"Main navigation"}).getByRole("button",{name:/^Library/}).click();
   await page.locator(".meeting-item").first().click();
   await page
     .getByLabel("Summary template")

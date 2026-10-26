@@ -179,7 +179,14 @@ export interface EngineStatus {
   captureAvailable: boolean;
   error?: string;
 }
+export interface GlobalDictationConfig {
+  enabled: boolean;
+  shortcut: string;
+  autoPaste: boolean;
+}
 export interface GlobalDictationStatus {
+  enabled?: boolean;
+  autoPaste?: boolean;
   shortcut: string;
   shortcutAvailable: boolean;
   state: "idle" | "starting" | "listening" | "processing" | "copied" | "paste_sent" | "error";

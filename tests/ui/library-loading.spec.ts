@@ -17,7 +17,7 @@ test("lean native startup, all/starred pages, full-library query, facets and sou
     ),
   ).toEqual(["meeting-000"]);
   await expect(
-    page.getByRole("button", { name: "All conversations 135" }),
+    page.getByRole("button", { name: "All 135" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Load more conversations" }).click();
   await expect(page.locator(".meeting-item")).toHaveCount(100);
@@ -64,22 +64,25 @@ test("lean native startup, all/starred pages, full-library query, facets and sou
   await expect(
     page.getByRole("button", { name: /Conversation 119/ }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "All conversations 135" }).click();
+  await page.getByRole("button", { name: "All 135" }).click();
   await page
-    .getByRole("textbox", { name: "Search conversations" })
+    .getByRole("textbox", { name: "Filter saved items" })
     .fill("obscure marker");
   await expect(page.locator(".meeting-item")).toHaveCount(1);
   await page.locator(".meeting-item").click();
   await expect(title(page)).toHaveValue("Conversation 119");
-  await page.getByRole("textbox", { name: "Search conversations" }).fill("");
+  await page.getByRole("textbox", { name: "Filter saved items" }).fill("");
   await page.getByText("Filter by folder, tag or person").click();
   await page
     .getByLabel("Filter by folder", { exact: true })
     .selectOption("Off-page team");
   await expect(page.locator(".meeting-item")).toHaveCount(1);
   await page
-    .getByRole("button", { name: "Ask your library", exact: true })
+    .getByRole("button", { name: "Search library", exact: true })
     .click();
+  await expect(page.locator(".desk-scope")).toContainText("135 conversations");
+  await page.getByText("Filter by folder, tag or person").click();
+  await page.getByLabel("Filter by folder", {exact:true}).selectOption("Off-page team");
   await expect(page.locator(".desk-scope")).toContainText("1 conversation");
   await page
     .getByRole("textbox", { name: "Search or ask your library" })
@@ -154,6 +157,10 @@ test("global paged task inbox opens off-page owners and supports omitted facet c
   await page.getByLabel("Filter by folder", { exact: true }).press("Enter");
   await expect(page.locator(".meeting-item")).toHaveCount(1);
   await page.getByRole("button", { name: "Tasks 75", exact: true }).click();
+  await expect(page.locator(".inbox-task")).toHaveCount(50);
+  await page.getByText("Filter by folder, tag or person").click();
+  await page.getByLabel("Filter by folder",{exact:true}).fill("Off-page team");
+  await page.getByLabel("Filter by folder",{exact:true}).press("Enter");
   await expect(page.locator(".inbox-task")).toHaveCount(1);
   await page.getByRole("checkbox", { name: "Complete Follow up 119" }).click();
   await expect(page.locator(".inbox-task")).toHaveCount(0);
@@ -281,7 +288,7 @@ test("mobile expanded filters retain a usable, visible list retry area", async (
     (window as any).__failPage = true;
   });
   await page
-    .getByRole("textbox", { name: "Search conversations", exact: true })
+    .getByRole("textbox", { name: "Filter saved items", exact: true })
     .fill("unavailable");
   await page
     .getByText("Library unavailable. Try again.", { exact: true })
@@ -309,7 +316,7 @@ test("mobile expanded filters retain a usable, visible list retry area", async (
     (window as any).__failPage = true;
   });
   await page
-    .getByRole("textbox", { name: "Search conversations", exact: true })
+    .getByRole("textbox", { name: "Filter saved items", exact: true })
     .fill("another unavailable query");
   await page
     .getByText("Library unavailable. Try again.", { exact: true })
@@ -318,7 +325,7 @@ test("mobile expanded filters retain a usable, visible list retry area", async (
     (window as any).__failPage = false;
   });
   await page
-    .getByRole("textbox", { name: "Search conversations", exact: true })
+    .getByRole("textbox", { name: "Filter saved items", exact: true })
     .fill("");
   await expect(page.locator(".meeting-item")).toHaveCount(50);
 });

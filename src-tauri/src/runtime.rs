@@ -81,6 +81,9 @@ impl DesktopRuntime {
                 .ok_or_else(|| AppError::new("invalid_arguments", format!("Missing {key}.")))
         };
         match method {
+            "update_settings" if params["changes"].get("globalDictation").is_some() => Err(
+                AppError::invalid("Use the Dictation anywhere controls to change its shortcut."),
+            ),
             "global_dictation_status" => Ok(self.dictation.status()),
             "global_dictation_toggle" => {
                 let target = self.dictation.prepare_target()?;
@@ -328,6 +331,10 @@ pub fn compose(data: &Path, resources: &Path, emit: Emit) -> Result<Arc<DesktopR
         text_delivery.clone(),
         emit,
     ));
+    dictation.configure(
+        crate::dictation_config::Config::from_value(&service.get_settings()?["globalDictation"])?,
+        |_, _| Ok(false),
+    )?;
     *dictation_observer.lock().unwrap_or_else(|p| p.into_inner()) = Arc::downgrade(&dictation);
     *application
         .lock()

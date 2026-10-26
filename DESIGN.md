@@ -194,3 +194,11 @@ The independent final review in `docs/ui-review-a.md` is **SHIP for interface de
 - Don't expose raw model IDs, CPU controls, connection URLs, or audio backend names as basic setup choices.
 - Don't replace flat pane seams with a dashboard of floating cards or decorative shadows.
 - Don't infer native capture, hardware performance, or hosted-service reliability from browser screenshots.
+
+## Simplified navigation (2026-10-26)
+
+Library and Tasks are the two primary destinations. New is a disclosure for New meeting, Voice note, and Import audio. Search library opens the shared keyword search and Ask Tuck workspace; Cmd/Ctrl-K focuses its composer. All/Starred, text filtering, and organization filters belong to the saved-item list. Search and Tasks have independent, visibly scoped filters. Hide the document list outside Library, retain active-recording return access, and preserve document selection, autosave and explicit capture. Label the document assistant “Ask about this meeting” to distinguish its scope from library answers. The sidebar footer is Settings plus a quiet local-storage line. Keep the existing porcelain surfaces and cornflower controls.
+
+Dictation anywhere settings use explicit Save, with enable, shortcut modifiers/key, automatic paste and Restore defaults. Settings stay disabled while a dictation action is prepared or active. Clipboard-only mode describes its effect and hides automatic-paste permission setup.
+
+The dictation shortcut uses an explicit key-chord recorder with Escape/blur cancellation, inline validation, and Save to apply. Existing native dictation and meeting shortcuts are routed to the recorder while it is active in the focused app.

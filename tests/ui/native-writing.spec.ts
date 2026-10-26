@@ -181,7 +181,7 @@ test("library answers reject forged autolink and reference destinations outside 
   );
   await page.goto("/");
   await page
-    .getByRole("button", { name: "Ask your library", exact: true })
+    .getByRole("button", { name: "Search library", exact: true })
     .click();
   await page
     .getByRole("textbox", { name: "Search or ask your library" })
@@ -204,7 +204,7 @@ test("library answers reject forged autolink and reference destinations outside 
     .getByRole("button", { name: "Forged reference", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Ask your library", exact: true }),
+    page.getByRole("heading", { name: "Search library", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Verified source", exact: true })
@@ -299,7 +299,7 @@ test("a delayed proposal or search cannot move into a different meeting or folde
     page.getByRole("region", { name: "Proposed changes" }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Ask your library", exact: true })
+    .getByRole("button", { name: "Search library", exact: true })
     .click();
   await page
     .getByText("Filter by folder, tag or person", { exact: false })

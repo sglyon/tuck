@@ -66,7 +66,8 @@ test("native import offers supported formats, preserves the selected path and ex
     { meeting, settings: defaults },
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Import audio", exact: true }).click();
+  await page.locator(".new-menu > summary").click();
+  await page.getByRole("button", { name: "Import audio…", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "Conversation title" }),
   ).toHaveValue(meeting.title);

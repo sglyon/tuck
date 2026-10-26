@@ -157,6 +157,11 @@ kbd {
   gap: 9px;
   color: var(--accent);
 }
+.brand-icon {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
 .brand > span {
   font-size: 26px;
   font-weight: 750;
@@ -4643,3 +4648,44 @@ mark {
   .live-coach-agents label { min-height: 40px; }
   .meeting-agents input, .meeting-agents select { min-height: 40px; }
 }
+
+.dictation-preferences { border: 0; margin: 20px 0; padding: 0; min-width: 0; }
+.dictation-preferences legend { font-weight: 600; margin-bottom: 14px; }
+.dictation-preference-toggle { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0; }
+.dictation-preference-toggle input { margin-top: 5px; flex-shrink: 0; }
+.dictation-preference-toggle small { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 3px; }
+.dictation-shortcut-fields { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.dictation-shortcut-recorder { margin: 16px 0; }
+.dictation-shortcut-recorder > span { font-weight: 600; }
+.dictation-shortcut-fields { align-items: center; }
+.dictation-shortcut-fields output { font-weight: 600; overflow-wrap: anywhere; }
+.dictation-shortcut-fields button[aria-pressed="true"] { border-color: var(--accent); }
+
+/* Navigation distinguishes destinations, creation, and saved-item filters. */
+.new-menu { position: relative; margin: 0 15px 14px; }
+.new-menu .new-conversation { margin: 0; cursor: pointer; list-style: none; }
+.new-menu summary::-webkit-details-marker { display: none; }
+.new-menu summary span { flex: 1; }
+.new-options { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 20; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); padding: 5px; }
+.new-options button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 8px; text-align: left; border-radius: 4px; }
+.new-options button:hover { background: var(--accent-soft); }
+.sidebar-search-action { display: flex; align-items: center; gap: 9px; margin: 0 15px 12px; padding: 9px; text-align: left; color: var(--muted); }
+.sidebar-search-action span { flex: 1; }
+.sidebar-search-action.is-active { color: var(--accent); }
+.sidebar-search-action kbd { font-size: 11px; }
+.library-list-tools { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.library-list-filters { display: flex; gap: 5px; padding: 0 15px; }
+.library-list-filters button { display: flex; gap: 7px; align-items: center; padding: 7px 9px; font-size: 12px; border-radius: 5px; color: var(--muted); }
+.library-list-filters button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.library-list-filters span { font-size: 11px; }
+.library-list-tools .library-search { margin-top: 8px; }
+.library-list-tools .library-search input { width: 100%; min-width: 0; }
+.sidebar-context { flex: 1; padding: 24px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.sidebar-capture-return { display: flex; gap: 8px; padding: 10px 20px; text-align: left; color: var(--red); }
+.scope-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 15px; }
+.scope-chips button { padding: 4px 6px; font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 3px; overflow-wrap: anywhere; }
+.library-desk > .scope-filters { margin: 14px 0; }
+.library-desk > .scope-chips { margin: 8px 0; }
+@media (max-width: 700px) { .new-menu .new-conversation { display: flex; } .new-options { position: static; margin-top: 5px; } .sidebar-search-action kbd { display: none; } }
+
+.local-workspace-compact { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; padding: 14px 9px; border-top: 1px solid var(--line); margin-top: 8px; }

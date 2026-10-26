@@ -35,7 +35,8 @@ export function ScopeFilters({
   onChange: (s: LibraryScope) => void;
 }) {
   return (
-    <details className="scope-filters">
+    <>
+    <details className="scope-filters" open={Object.values(scope).some(Boolean) || undefined}>
       <summary>
         Filter by folder, tag or person
         {Object.values(scope).some(Boolean) && <span className="status-dot" />}
@@ -108,10 +109,14 @@ export function ScopeFilters({
         )}
       </div>
     </details>
+    {Object.values(scope).some(Boolean) && <div className="scope-chips" role="group" aria-label="Active filters">{(Object.keys(scope) as (keyof LibraryScope)[]).filter(key => scope[key]).map(key => <button key={key} aria-label={`Clear ${key} filter: ${scope[key]}`} onClick={() => onChange({...scope,[key]:""})}>{key}: {scope[key]} ×</button>)}</div>}
+    </>
   );
 }
 export default function LibraryDesk({
   mode,
+  focusRequest = 0,
+  onScopeChange,
   library,
   revision,
   settings,
@@ -121,6 +126,8 @@ export default function LibraryDesk({
   notify,
 }: {
   mode: "library" | "tasks";
+  focusRequest?: number;
+  onScopeChange: (scope: LibraryScope) => void;
   library: LibraryOverview;
   revision: number;
   settings: Settings;
@@ -130,6 +137,8 @@ export default function LibraryDesk({
   notify: (text: string, error?: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
+  const queryRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (mode === "library") queryRef.current?.focus({preventScroll:true}); }, [mode, focusRequest]);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searched, setSearched] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -285,6 +294,7 @@ export default function LibraryDesk({
         <p className="section-description">
           Commitments across your conversations, with their context close by.
         </p>
+        <ScopeFilters library={library} scope={scope} onChange={onScopeChange} />
         <label className="inline-check">
           <input
             type="checkbox"
@@ -379,10 +389,11 @@ export default function LibraryDesk({
     );
   return (
     <article className="library-desk">
-      <h1>Ask your library</h1>
+      <h1>Search library</h1>
       <p className="section-description">
-        Find a spoken detail, or connect the dots across your meetings.
+        Find matching passages with keyword search, or ask Tuck a question across your saved meetings and voice notes.
       </p>
+      <ScopeFilters library={library} scope={scope} onChange={onScopeChange} />
       <div className="desk-scope">
         {scopeCount === null
           ? "Checking scope…"
@@ -402,6 +413,7 @@ export default function LibraryDesk({
           Search or ask your library
         </label>
         <textarea
+          ref={queryRef}
           id="library-question"
           rows={3}
           value={query}

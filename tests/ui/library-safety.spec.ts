@@ -420,6 +420,7 @@ test("backup flushes both editors and restore previews counts before a fingerpri
       { exact: true },
     ),
   ).toBeVisible();
+  await page.getByRole("navigation", {name:"Main navigation"}).getByRole("button",{name:/^Library/}).click();
   await page.locator(".meeting-item").first().click();
   await page.getByRole("tab", { name: "Notes", exact: true }).click();
   await expect(
@@ -470,7 +471,7 @@ test("restore reapplies an existing library query instead of displaying unfilter
 }) => {
   await safetyPort(page);
   await page
-    .getByRole("textbox", { name: "Search conversations", exact: true })
+    .getByRole("textbox", { name: "Filter saved items", exact: true })
     .fill("No such saved conversation");
   await expect(page.locator(".meeting-item")).toHaveCount(0);
   await expect(
@@ -485,8 +486,10 @@ test("restore reapplies an existing library query instead of displaying unfilter
   await expect(
     page.getByText("Restore complete", { exact: true }),
   ).toBeVisible();
+  await page.getByRole("navigation", {name:"Main navigation"}).getByRole("button",{name:/^Library/}).click();
+
   await expect(
-    page.getByRole("textbox", { name: "Search conversations", exact: true }),
+    page.getByRole("textbox", { name: "Filter saved items", exact: true }),
   ).toHaveValue("No such saved conversation");
   await expect(
     page.getByText("No conversations found.", { exact: true }),

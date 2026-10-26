@@ -107,17 +107,17 @@ test("mobile uses one pane with a reachable assistant and no horizontal overflow
     .click();
   await page
     .getByRole("navigation", { name: "Workspace panes" })
-    .getByRole("button", { name: "Ask Tuck" })
+    .getByRole("button", { name: "Assistant" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Ask Tuck", exact: true }),
+    page.getByRole("heading", { name: "Ask about this meeting", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Workspace panes" })
     .getByRole("button", { name: "Library" })
     .click();
   await expect(
-    page.getByRole("textbox", { name: "Search conversations" }),
+    page.getByRole("textbox", { name: "Filter saved items" }),
   ).toBeVisible();
   expect(
     await page.evaluate(

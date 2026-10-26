@@ -17,6 +17,8 @@ struct RuntimeState {
     slots: Arc<tokio::sync::Semaphore>,
     quitting: AtomicBool,
     dictation_key_down: AtomicBool,
+    shortcut_recorder: AtomicBool,
+    dictation_menu: std::sync::Mutex<Vec<MenuItem<tauri::Wry>>>,
 }
 /// Failed composition has no live capture or loaded local meeting to flush. Keep
 /// ordinary commands unavailable, but retain a working native quit path.
@@ -41,6 +43,11 @@ fn shortcut_pressed(latch: &AtomicBool, pressed: bool) -> bool {
         false
     }
 }
+fn state_key_reset(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<RuntimeState>() {
+        state.dictation_key_down.store(false, Ordering::Release);
+    }
+}
 fn dictate(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<RuntimeState>() {
         if let Ok(runtime) = &state.service {
@@ -60,7 +67,18 @@ fn cancel_dictation(app: &tauri::AppHandle) {
         }
     }
 }
+fn shortcut_recorder_active(app: &tauri::AppHandle) -> bool {
+    app.try_state::<RuntimeState>().is_some_and(|state| {
+        state.shortcut_recorder.load(Ordering::Acquire)
+            && app.get_webview_window("main").is_some_and(|window| window.is_focused().unwrap_or(false))
+    })
+}
 fn intent(app: &tauri::AppHandle, action: &str) {
+    // The File menu's accelerator can arrive separately from the global plugin.
+    if action == "record" && shortcut_recorder_active(app) {
+        let _ = app.emit("engine-event", json!({"event":"shortcut_recorded","payload":{"shortcut":"CommandOrControl+Shift+R"}}));
+        return;
+    }
     if let Some(state) = app.try_state::<RuntimeState>() {
         if let Ok(runtime) = &state.service {
             runtime.desktop_intent(action);
@@ -110,6 +128,39 @@ async fn engine_call(
         .clone()
         .try_acquire_owned()
         .map_err(|_| "Tuck is finishing other work. Try again in a moment.")?;
+    if method == "shortcut_recorder" {
+        let active = params["active"].as_bool().ok_or("Invalid shortcut recorder state.")?;
+        state.shortcut_recorder.store(active, Ordering::Release);
+        state_key_reset(&app);
+        return Ok(json!({"active":active}));
+    }
+    if method == "global_dictation_configure" {
+        return tauri::async_runtime::spawn_blocking(move || {
+            struct HostRegistry(tauri::AppHandle);
+            impl tuck::dictation_config::Registry for HostRegistry {
+                fn contains(&self, key: tauri_plugin_global_shortcut::Shortcut) -> bool { self.0.global_shortcut().is_registered(key) }
+                fn register(&self, key: tauri_plugin_global_shortcut::Shortcut) -> tuck_core::ports::Result<()> {
+                    self.0.global_shortcut().register(key).map_err(|_| tuck_core::AppError::unavailable("That shortcut is unavailable or used by another app. Your previous shortcut is unchanged."))
+                }
+                fn unregister(&self, key: tauri_plugin_global_shortcut::Shortcut) -> tuck_core::ports::Result<()> {
+                    self.0.global_shortcut().unregister(key).map_err(|_| tuck_core::AppError::unavailable("The shortcut could not be released. Try again."))
+                }
+            }
+            let config = tuck::dictation_config::Config::from_value(&params)?;
+            let result = service.dictation.configure(config, |old, new| {
+                tuck::dictation_config::apply(old,new,&HostRegistry(app.clone()),|| {
+                    service.service.handle("update_settings",json!({"changes":{"globalDictation":new}})).map(|_| ())
+                })
+            });
+            if result.is_ok() {
+                state_key_reset(&app);
+            } else {
+                let config = service.dictation.configuration();
+                service.dictation.registered(config.enabled && config.key().is_ok_and(|key| app.global_shortcut().is_registered(key)));
+            }
+            result
+        }).await.map_err(|_| "Dictation settings could not be saved.".to_string())?.map_err(|e| e.message);
+    }
     let quitting = method == "quit_app";
     let result = tauri::async_runtime::spawn_blocking(move || {
         service.handle(&method, params).map_err(|e| e.message)
@@ -167,8 +218,20 @@ fn main() {
                 .with_handler(|app, shortcut, event| {
                     use std::str::FromStr;
                     use tauri_plugin_global_shortcut::Shortcut;
-                    let dictation = Shortcut::from_str(tuck::global_dictation::SHORTCUT)
-                        .is_ok_and(|value| value.id() == shortcut.id());
+                    if shortcut_recorder_active(app) {
+                        if event.state() == ShortcutState::Pressed {
+                            let _ = app.emit("engine-event", json!({"event":"shortcut_recorded","payload":{"shortcut":shortcut.to_string()}}));
+                        }
+                        state_key_reset(app);
+                        return;
+                    }
+                    let dictation = app.try_state::<RuntimeState>().is_some_and(|state| {
+                        state.service.as_ref().is_ok_and(|runtime| {
+                            let config = runtime.dictation.configuration();
+                            config.enabled
+                                && config.key().is_ok_and(|value| value.id() == shortcut.id())
+                        })
+                    });
                     if dictation {
                         if let Some(state) = app.try_state::<RuntimeState>() {
                             if shortcut_pressed(
@@ -205,8 +268,19 @@ fn main() {
                         .filter(|s| !s.is_empty())
                         .unwrap_or("Tuck — private meeting notes")
                         .to_owned();
+                    let enabled = payload["enabled"] != false;
                     let tray_app = handle.clone();
                     let _ = handle.run_on_main_thread(move || {
+                        if let Some(state) = tray_app.try_state::<RuntimeState>() {
+                            for item in state
+                                .dictation_menu
+                                .lock()
+                                .unwrap_or_else(|p| p.into_inner())
+                                .iter()
+                            {
+                                let _ = item.set_enabled(enabled);
+                            }
+                        }
                         if let Some(tray) = tray_app.tray_by_id("tuck") {
                             let _ = tray.set_title(title);
                             let _ = tray.set_tooltip(Some(tooltip));
@@ -231,6 +305,8 @@ fn main() {
                 slots: Arc::new(tokio::sync::Semaphore::new(4)),
                 quitting: AtomicBool::new(false),
                 dictation_key_down: AtomicBool::new(false),
+                shortcut_recorder: AtomicBool::new(false),
+                dictation_menu: std::sync::Mutex::new(Vec::new()),
             });
             let show = MenuItem::with_id(app, "show", "Open Tuck", true, None::<&str>)?;
             let record = MenuItem::with_id(app, "record", "Record a meeting…", true, None::<&str>)?;
@@ -278,6 +354,10 @@ fn main() {
                 true,
                 None::<&str>,
             )?;
+            *app.state::<RuntimeState>()
+                .dictation_menu
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = vec![file_dictate.clone(), dictation.clone()];
             let cancel = MenuItem::with_id(
                 app,
                 "dictation-cancel",
@@ -310,21 +390,14 @@ fn main() {
                     false
                 }
             };
-            let dictation_registered = match app
-                .global_shortcut()
-                .register(tuck::global_dictation::SHORTCUT)
-            {
-                Ok(()) => app
-                    .global_shortcut()
-                    .is_registered(tuck::global_dictation::SHORTCUT),
-                Err(error) => {
-                    eprintln!("Tuck dictation shortcut unavailable: {error}");
-                    false
-                }
-            };
             if let Ok(runtime) = &app.state::<RuntimeState>().service {
+                let config = runtime.dictation.configuration();
+                let available = config.enabled
+                    && config
+                        .key()
+                        .is_ok_and(|key| app.global_shortcut().register(key).is_ok());
                 runtime.recording_shortcut_registered(registered);
-                runtime.dictation.registered(dictation_registered);
+                runtime.dictation.registered(available);
                 #[cfg(target_os = "macos")]
                 let notifications = Arc::new(tuck::adapters::notifications::MacNotifications);
                 #[cfg(not(target_os = "macos"))]
@@ -341,6 +414,11 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Focused(false) | tauri::WindowEvent::CloseRequested { .. }) {
+                if let Some(state) = window.app_handle().try_state::<RuntimeState>() {
+                    state.shortcut_recorder.store(false, Ordering::Release);
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 intent(window.app_handle(), "hide");

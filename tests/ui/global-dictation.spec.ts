@@ -10,9 +10,10 @@ async function fixture(page: Page, options: { permission?: string; shortcut?: bo
     const meetings:any[] = [{...original,id:"existing-notes",title:"Illustrative project notes",isExample:false,status:"complete",messages:[]}];
     const calls:any[]=[];w.__dictationCalls=calls;w.__dictationClipboardWrites=0;w.__dictationPasteEvents=0;w.__accessibilityOpened=0;w.__browserClipboardCalls=0;
     Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async()=>{w.__browserClipboardCalls++;throw new Error("The UI must delegate copying to the native controller");}}});
-    let global:any={shortcut:"CommandOrControl+Shift+Space",shortcutAvailable:options.shortcut!==false,state:"idle",meetingId:null,pasteAvailable:options.permission==="granted",pastePermission:options.permission || "denied",message:options.shortcut===false?"Another app is using this shortcut. Use the tray menu or start here to copy a voice note.":null};
+    let global:any={enabled:true,autoPaste:true,shortcut:"CommandOrControl+Shift+Space",shortcutAvailable:options.shortcut!==false,state:"idle",meetingId:null,pasteAvailable:options.permission==="granted",pastePermission:options.permission || "denied",message:options.shortcut===false?"Another app is using this shortcut. Use the tray menu or start here to copy a voice note.":null};
     const callbacks=new Map<number,any>();const listeners=new Map<string,Set<number>>();let serial=0;
     const emit=(event:string,payload:any)=>{for(const id of listeners.get("engine-event") || [])callbacks.get(id)?.({payload:{event,payload}});};
+    w.__recordShortcut=(shortcut:string)=>emit("shortcut_recorded",{shortcut});
     w.__globalStatus=(patch:any)=>{global={...global,...patch};emit("global_dictation_updated",structuredClone(global));};
     w.__globalNativeStart=()=>{global={...global,state:"listening",meetingId:"global-voice",message:null};emit("global_dictation_updated",structuredClone(global));};
     const status={engineVersion:"illustrative global dictation fixture",platform:options.platform || "macos",modelInstalled:true,modelDownloading:false,modelProgress:0,speakerModelInstalled:false,activeMeetingId:null,recordingState:"idle",captureAvailable:true};
@@ -34,6 +35,12 @@ async function fixture(page: Page, options: { permission?: string; shortcut?: bo
         const snapshot=structuredClone(global);
         if(options.held && !w.__statusReleased)return new Promise(resolve=>{w.__releaseDictationStatus=()=>{w.__statusReleased=true;resolve(snapshot);};});
         return snapshot;
+      }
+      if(method==="shortcut_recorder")return {active:p.active};
+      if(method==="global_dictation_configure"){
+        if(p.shortcut==="Alt+X")throw new Error("That shortcut is unavailable or used by another app. Your previous shortcut is unchanged.");
+        global={...global,...p,shortcutAvailable:p.enabled,pasteAvailable:p.autoPaste && options.permission==="granted"};
+        emit("global_dictation_updated",structuredClone(global));return structuredClone(global);
       }
       if(method==="global_dictation_toggle"){
         if(w.__startDictationFails){global={...global,state:"error",message:"Your microphone could not start. Check its permission and try again."};emit("global_dictation_updated",structuredClone(global));throw new Error(global.message);}
@@ -85,7 +92,7 @@ test("one stable polite announcer reports all global phases outside Settings wit
   for(const [state,text] of [["starting","Getting your microphone ready…"],["listening","Listening · microphone only"],["processing","Finishing your voice note…"],["copied","Copied. Paste your words wherever you need them."],["paste_sent","Copied. Paste sent to your text field."],["error","Dictation needs attention"]]){
     await page.evaluate(state=>(window as any).__globalStatus({state,message:null}),state);await expect(announcer).toHaveText(text);await expect(announcer).toHaveCount(1);await expect(page.getByRole("textbox",{name:"Conversation title"})).toBeFocused();expect(await page.evaluate(()=>(window as any).__announcerNode===document.querySelector('[aria-label="Dictation announcements"]'))).toBe(true);
   }
-  await page.getByRole("button",{name:/^Settings/}).click();await page.getByRole("tab",{name:"Audio & models",exact:true}).click();await page.evaluate(()=>(window as any).__globalStatus({state:"copied",message:null}));await expect(announcer).toHaveText("Copied. Paste your words wherever you need them.");await expect(region(page).locator('[role="status"], [aria-live]')).toHaveCount(0);expect(await page.evaluate(()=>(window as any).__announcerNode===document.querySelector('[aria-label="Dictation announcements"]'))).toBe(true);
+  await page.getByRole("button",{name:/^Settings/}).click();await page.getByRole("tab",{name:"Audio & models",exact:true}).click();await page.evaluate(()=>(window as any).__globalStatus({state:"copied",message:null}));await expect(announcer).toHaveText("Copied. Paste your words wherever you need them.");await expect(region(page).locator('[role="status"]:not(#dictation-shortcut-help), [aria-live]')).toHaveCount(0);expect(await page.evaluate(()=>(window as any).__announcerNode===document.querySelector('[aria-label="Dictation announcements"]'))).toBe(true);
 });
 
 test("bounded global dictation desktop and compact evidence",async({page})=>{
@@ -99,4 +106,66 @@ test("bounded global dictation desktop and compact evidence",async({page})=>{
     await page.evaluate(()=>(window as any).__globalStatus({state:"error",message:"Your microphone could not start. Check its permission and try again."}));await expect(indicator(page)).toBeVisible();await region(page).locator(".section-heading").scrollIntoViewIfNeeded();await page.screenshot({path:`.impeccable/review/global-dictation-confirm-error-${width}.png`});
     await page.evaluate(()=>(window as any).__globalStatus({state:"idle",shortcutAvailable:false,pasteAvailable:false,pastePermission:"unavailable",message:"This shortcut is unavailable in this desktop session. Start here or use Tuck’s tray menu; your words are copied for manual paste."}));await expect(indicator(page)).toHaveCount(0);await region(page).locator(".section-heading").scrollIntoViewIfNeeded();await page.screenshot({path:`.impeccable/review/global-dictation-confirm-shortcut-${width}.png`});
   }
+});
+
+test("dictation preferences save, disable capture, restore defaults and preserve conflicts",async({page})=>{
+  await fixture(page,{permission:"granted"}); await settings(page);
+  const area=region(page);
+  await recordShortcut(page,"Alt+Shift+KeyD");
+  await area.getByRole("switch",{name:/Paste automatically/}).uncheck();
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByText("Dictation settings saved on this device.")).toBeVisible();
+  await expect(area.locator("kbd")).toHaveText(/Option \+ Shift \+ D|Alt \+ Shift \+ D/);
+  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure").at(-1).params)).toEqual({enabled:true,shortcut:"Alt+Shift+D",autoPaste:false});
+  await area.getByRole("switch",{name:/Enable dictation anywhere/}).uncheck();
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByRole("button",{name:"Start dictation here"})).toBeDisabled();
+  await expect(area.getByText("Dictation anywhere is off. Its global shortcut is released.")).toBeVisible();
+  await area.getByRole("button",{name:"Restore defaults"}).click();
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByRole("button",{name:"Start dictation here"})).toBeEnabled();
+  await recordShortcut(page,"Alt+KeyX");
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByText(/That shortcut is unavailable or used by another app/)).toBeVisible();
+  await expect(area.locator("kbd")).toHaveText(/Shift \+ Space/);
+  await area.getByRole("button",{name:"Start dictation here"}).click();
+  await expect(area.getByRole("button",{name:"Record shortcut"})).toBeDisabled();
+  await expect(area.getByText("Finish dictation before changing these settings.")).toBeVisible();
+});
+
+async function recordShortcut(page: Page, chord: string) {
+  await region(page).getByRole("button",{name:"Record shortcut",exact:true}).click();
+  await expect(region(page).getByText("Press your shortcut now. Escape cancels.")).toBeVisible();
+  await page.keyboard.press(chord);
+}
+
+test("shortcut recorder cancels, rejects unmodified keys and captures app shortcuts without navigating",async({page})=>{
+  await fixture(page); await settings(page);
+  const area=region(page);
+  await recordShortcut(page,"KeyD");
+  await expect(area.getByText("Include Command, Control, or Option/Alt with a key.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(area.getByText("Shortcut recording canceled.")).toBeVisible();
+  await expect(area.getByRole("status").filter({hasText:"Shortcut recording canceled"})).toBeVisible();
+  await recordShortcut(page,"Control+KeyK");
+  await expect(area).toBeVisible();
+  await expect(area.getByRole("status").filter({hasText:"Shortcut captured"})).toBeVisible();
+  await expect(area.locator("output")).toHaveText("Ctrl + K");
+  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure"))).toEqual([]);
+});
+
+test("recorder handles registered native shortcuts and cancels on blur",async({page})=>{
+  await fixture(page); await settings(page);
+  const area=region(page);
+  await recordShortcut(page,"Shift");
+  await page.evaluate(()=>(window as any).__recordShortcut("super+shift+KeyR"));
+  await expect(area.getByText("That shortcut starts a meeting. Choose another shortcut for dictation.")).toBeVisible();
+  await page.evaluate(()=>(window as any).__recordShortcut("super+shift+Space"));
+  await expect(area.getByText("Shortcut captured. Save dictation settings to apply it.")).toBeVisible();
+  await expect(area.getByRole("button",{name:"Start dictation here"})).toBeEnabled();
+  await recordShortcut(page,"Shift");
+  await area.getByRole("switch",{name:/Paste automatically/}).focus();
+  await expect(area.getByRole("button",{name:"Record shortcut",exact:true})).toBeVisible();
+  await expect.poll(async()=>page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="shortcut_recorder").at(-1)?.params.active)).toBe(false);
+  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_toggle"))).toEqual([]);
 });

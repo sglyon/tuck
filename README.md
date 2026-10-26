@@ -36,7 +36,7 @@ Agents share your selected AI provider. Automatic context contains a bounded rec
 
 ## Dictation anywhere
 
-Click a text field in another app, then press **Cmd/Ctrl + Shift + Space** to speak. Press it again to finish. Tuck stays in the background, saves a local voice note and copies the recognized words. The tray menu and Settings → Audio & models provide alternatives when the shortcut is unavailable.
+Click a text field in another app, then press **Cmd/Ctrl + Shift + Space** (the default shortcut) to speak. Press it again to finish. Tuck stays in the background, saves a local voice note and copies the recognized words. The tray menu and Settings → Audio & models provide alternatives when the shortcut is unavailable.
 
 On macOS, Tuck can send a paste to the same confirmed editable field when you allow Accessibility access. Changing apps or fields, protected inputs and uncertain targets leave the text on the clipboard for manual paste. Windows and Linux use the clipboard/manual-paste path. Accessibility is optional for recording and copying; Tuck only opens its settings when you ask. “Paste sent” confirms dispatch, not that another app accepted the text.
 
@@ -128,3 +128,11 @@ To build without submitting to Apple, use `make signed-app dmg`. To finish the c
 `make install` refuses to replace a running Tuck app. It does not force-quit the app or discard unsaved work. Installation into `/Applications` may require local administrator permissions.
 
 The selected royal-blue app icon source is `assets/icon.png`; `make icons` regenerates platform icons. Signed builds run this target automatically. `assets/icon.svg` retains the earlier waveform artwork as a legacy source.
+
+The in-app brand uses the same `assets/icon.png` source as the native app icons. Installation refreshes the app’s Launch Services registration; run `make refresh-icons` to refresh it separately.
+
+Configure global dictation in Settings → Audio & models → Dictation anywhere: turn it on or off, choose a shortcut, and choose automatic paste or clipboard-only. Preferences are saved on this device; changing them never starts recording.
+
+Library and Tasks are the main navigation destinations. Use New for a meeting, voice note or audio import. Search library (Cmd/Ctrl-K) offers local keyword search and Ask Tuck across saved items. All/Starred and list filters affect saved-item browsing; search and tasks have independent filters.
+
+To change the global dictation shortcut, open Settings → Audio & models, click **Record shortcut**, and press the desired key chord. Escape or leaving the recorder cancels capture. Click **Save dictation settings** to apply it.

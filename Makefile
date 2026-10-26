@@ -15,7 +15,7 @@ DMG := $(RELEASE_DIR)/Tuck_$(VERSION)_$(ARCH).dmg
 ZIP := $(RELEASE_DIR)/Tuck-notarization.zip
 INSTALL_DIR ?= /Applications
 
-.PHONY: help auth notary-check deps native icons signed-app notarize-app dmg notarize-dmg verify install release
+.PHONY: help auth notary-check deps native icons signed-app notarize-app dmg notarize-dmg verify install refresh-icons release
 
 help:
 	@echo 'make auth APPLE_ID=you@example.com  Store notarization credentials in Keychain (once)'
@@ -89,5 +89,11 @@ install:
 	codesign --verify --deep --strict --verbose=2 "$(APP)"
 	ditto "$(APP)" "$(INSTALL_DIR)/Tuck.app"
 	codesign --verify --deep --strict --verbose=2 "$(INSTALL_DIR)/Tuck.app"
+	$(MAKE) refresh-icons
+
+# Refresh this bundle only; do not clear the global Launch Services database.
+refresh-icons:
+	touch "$(INSTALL_DIR)/Tuck.app"
+	/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(INSTALL_DIR)/Tuck.app"
 
 release: notary-check deps native signed-app notarize-app dmg notarize-dmg verify install

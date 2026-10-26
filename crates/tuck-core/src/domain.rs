@@ -360,7 +360,7 @@ impl TranscriptSegment {
     }
 }
 pub fn default_settings() -> Value {
-    json!({"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"notionContent":{"recap":true,"notes":true,"tasks":true},"threads":2,"meetingAgents":[{"id":"00000000-0000-4000-8000-000000000001","name":"Quiet meeting helper","instructions":"Notice important unanswered questions and concrete follow-ups. Speak only when a short suggestion would materially help the conversation.","pace":"quiet"},{"id":"00000000-0000-4000-8000-000000000002","name":"Sales coach","instructions":"Actively help me understand the customer. Notice unclear needs, objections, decision criteria and next steps. Suggest a concise question or useful insight grounded in what the customer actually said. Do not invent details or coach pressure tactics.","pace":"active"}],"meetingReminders":false,"keepAudio":true,"customTemplates":[],"recipes":[
+    json!({"globalDictation":{"enabled":true,"shortcut":"CommandOrControl+Shift+Space","autoPaste":true},"provider":"local","model":"qwen3:4b","localUrl":"http://127.0.0.1:11434","hostedConsent":false,"webSearch":false,"autoSummary":false,"notionAutoSync":false,"notionTarget":"","notionPropertyMapping":{},"notionContent":{"recap":true,"notes":true,"tasks":true},"threads":2,"meetingAgents":[{"id":"00000000-0000-4000-8000-000000000001","name":"Quiet meeting helper","instructions":"Notice important unanswered questions and concrete follow-ups. Speak only when a short suggestion would materially help the conversation.","pace":"quiet"},{"id":"00000000-0000-4000-8000-000000000002","name":"Sales coach","instructions":"Actively help me understand the customer. Notice unclear needs, objections, decision criteria and next steps. Suggest a concise question or useful insight grounded in what the customer actually said. Do not invent details or coach pressure tactics.","pace":"active"}],"meetingReminders":false,"keepAudio":true,"customTemplates":[],"recipes":[
         {"id":"851ac7aa-aea5-4ed0-a750-838224c1850b","name":"Decisions and next steps","prompt":"What decisions were made and which next steps were agreed? Cite evidence. Include owners and dates only when stated; separate suggestions from commitments."},
         {"id":"35ad4a91-65dc-47b8-814d-efc48d709a5c","name":"Follow-up draft","prompt":"Draft a concise follow-up message I can review. Cover the main outcome, agreed actions and unresolved questions. Preserve uncertainty and attach evidence citations. Do not send it."},
         {"id":"9051642a-114c-48c6-aeb6-847b7be6549a","name":"Risks and open questions","prompt":"Identify stated risks, blockers, dependencies and unanswered questions. Cite evidence and clearly label any inference. Do not invent risks unsupported by this meeting."}
@@ -404,6 +404,21 @@ pub fn updated_settings(current: &Value, changes: &Value) -> Result<Value> {
             return Err(AppError::invalid(format!("{name} must be true or false.")));
         }
     }
+    let dictation = result["globalDictation"]
+        .as_object()
+        .ok_or_else(|| AppError::invalid("Invalid dictation settings."))?;
+    if dictation.len() != 3
+        || !dictation.get("enabled").is_some_and(Value::is_boolean)
+        || !dictation.get("autoPaste").is_some_and(Value::is_boolean)
+    {
+        return Err(AppError::invalid("Invalid dictation settings."));
+    }
+    text(
+        &result["globalDictation"]["shortcut"],
+        "Dictation shortcut",
+        100,
+        false,
+    )?;
     let content = notion_content(&result)?;
     if result["notionAutoSync"] == true && !content.iter().any(|selected| *selected) {
         return Err(AppError::invalid(

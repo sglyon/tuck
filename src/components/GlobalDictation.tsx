@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, LoaderCircle, Mic, Square, X } from "lucide-react";
 import { call, native } from "../lib/bridge";
+import ShortcutRecorder, { shortcutLabel } from "./ShortcutRecorder";
+import type { GlobalDictationConfig } from "../lib/types";
 import type { GlobalDictationController } from "../lib/useGlobalDictation";
 
-function shortcutLabel(shortcut: string) {
-  return shortcut.replace("CommandOrControl", /Mac/.test(navigator.platform) ? "Cmd" : "Ctrl").replace(/\+/g, " + ");
-}
 function statusLabel(state: string) {
   switch (state) {
     case "starting": return "Getting your microphone ready…";
@@ -23,23 +22,45 @@ export default function GlobalDictation({ controller, platform, onOpenNote }: {
   platform: string;
   onOpenNote: (id: string) => void;
 }) {
-  const { status, pending, error, refresh, toggle, cancel } = controller;
+  const { status, pending, error, refresh, toggle, cancel, configure } = controller;
+  const [draft, setDraft] = useState<GlobalDictationConfig>({ enabled: true, shortcut: "CommandOrControl+Shift+Space", autoPaste: true });
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (status) setDraft({ enabled: status.enabled !== false, shortcut: status.shortcut, autoPaste: status.autoPaste !== false });
+  }, [status?.enabled, status?.shortcut, status?.autoPaste]);
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [permissionError, setPermissionError] = useState("");
   useEffect(() => { void refresh(); }, [refresh]);
   const active = status && ["starting", "listening", "processing"].includes(status.state);
   const mac = /mac|darwin/i.test(platform);
   const needsAccessibility = mac && ["denied", "unknown"].includes(status?.pastePermission || "unknown");
+  const locked = !!pending || !!active;
+  const enabled = status?.enabled !== false;
+  const edit = (changes: Partial<GlobalDictationConfig>) => { setDraft(d => ({...d,...changes})); setSaved(false); };
   return <section className="global-dictation-settings" aria-label="Dictation anywhere">
     <div className="section-heading"><Mic size={18} /><h2>Dictation anywhere</h2></div>
     <p className="section-description">Keep your cursor where you’re working. Speak into Tuck, then bring your words back to that app.</p>
     {status && <>
-      <div className="global-dictation-shortcut"><kbd>{shortcutLabel(status.shortcut)}</kbd><span>Press once to speak. Press again to finish.</span></div>
+      <fieldset className="dictation-preferences" disabled={locked || !native}>
+        <legend>Dictation preferences</legend>
+        <label className="dictation-preference-toggle"><input type="checkbox" role="switch" checked={draft.enabled} onChange={e => edit({enabled:e.target.checked})} /><span>Enable dictation anywhere<small>Use a global shortcut or the tray menu. Voice notes inside Tuck stay available when this is off.</small></span></label>
+        <ShortcutRecorder value={draft.shortcut} disabled={locked || !native} mac={mac} onChange={shortcut => edit({shortcut})} />
+        <label className="dictation-preference-toggle"><input type="checkbox" role="switch" checked={draft.autoPaste} onChange={e => edit({autoPaste:e.target.checked})} /><span>Paste automatically<small>{mac ? "Send a paste only to the original confirmed text field. Otherwise, copy for manual paste." : "Automatic paste is currently supported on macOS. This device copies for manual paste."}</small></span></label>
+        {!draft.autoPaste && <p className="quiet-note">Clipboard only: Tuck will copy your words without inspecting a text field or sending a paste.</p>}
+        <div className="global-dictation-actions">
+          <button className="button secondary compact" onClick={async () => { if (await configure(draft)) setSaved(true); }}>Save dictation settings</button>
+          <button className="global-dictation-link" onClick={() => edit({enabled:true,shortcut:"CommandOrControl+Shift+Space",autoPaste:true})}>Restore defaults</button>
+        </div>
+      </fieldset>
+      {active && <p className="quiet-note">Finish dictation before changing these settings.</p>}
+      {saved && <p className="quiet-note" role="status">Dictation settings saved on this device.</p>}
+      {!enabled && <p className="quiet-note">Dictation anywhere is off. Its global shortcut is released.</p>}
+      <div className="global-dictation-shortcut"><kbd>{shortcutLabel(status.shortcut, mac)}</kbd><span>{enabled ? "Press once to speak. Press again to finish." : "Shortcut inactive while dictation is off."}</span></div>
       <p className="global-dictation-instructions">Click a text field in another app, then use the shortcut. Tuck stays in the background and saves a local voice note.</p>
       <p className="global-dictation-privacy">Microphone only. Local transcription. No AI rewriting.</p>
-      {!status.shortcutAvailable && <p className="global-dictation-warning">{status.message || "The shortcut could not be registered. Another app may be using it. You can still start dictation here and paste the copied text yourself."}</p>}
+      {enabled && !status.shortcutAvailable && <p className="global-dictation-warning">{status.message || "The shortcut could not be registered. Another app may be using it. You can still start dictation here and paste the copied text yourself."}</p>}
       {status.pasteAvailable ? <p className="quiet-note">Your words are copied, then a paste is sent only when Tuck can confirm your original text field.</p> : <p className="quiet-note">Your words are copied to the clipboard. Paste them yourself when automatic insertion is unavailable.</p>}
-      {needsAccessibility && !status.pasteAvailable && <div className="global-dictation-permission">
+      {enabled && status.autoPaste !== false && needsAccessibility && !status.pasteAvailable && <div className="global-dictation-permission">
         <p>To send a paste to your text field, allow Tuck in macOS Accessibility. Recording and copying work without this permission.</p>
         <button className="button secondary compact" disabled={permissionBusy || !!active} onClick={async () => {
           setPermissionBusy(true); setPermissionError("");
@@ -51,7 +72,7 @@ export default function GlobalDictation({ controller, platform, onOpenNote }: {
       </div>}
       <div className="global-dictation-result"><p>{statusLabel(status.state)}</p>{status.shortcutAvailable && status.message && <p>{status.message}</p>}</div>
       <div className="global-dictation-actions">
-        <button className="button secondary compact" disabled={!!pending || status.state === "starting" || status.state === "processing"} onClick={() => void toggle()}>{status.state === "listening" ? <><Square size={13} />Finish dictation</> : <><Mic size={14} />Start dictation here</>}</button>
+        <button className="button secondary compact" disabled={!enabled || !!pending || status.state === "starting" || status.state === "processing"} onClick={() => void toggle()}>{status.state === "listening" ? <><Square size={13} />Finish dictation</> : <><Mic size={14} />Start dictation here</>}</button>
         {active && <button className="button subtle compact" disabled={!!pending} onClick={() => void cancel()}>Save without inserting</button>}
         {!active && status.meetingId && <button className="global-dictation-link" onClick={() => onOpenNote(status.meetingId!)}>Open voice note</button>}
       </div>

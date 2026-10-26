@@ -47,6 +47,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import brandIcon from "../assets/icon.png";
 import { useLibraryIndex } from "./lib/useLibraryIndex";
 import { meetingHeader, pruneDetails } from "./lib/library";
 import Settings from "./components/Settings";
@@ -118,17 +119,14 @@ const emptyStatus: EngineStatus = {
 function Brand() {
   return (
     <div className="brand">
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-        <rect width="28" height="28" rx="8" fill="currentColor" />
-        <path
-          d="M8 8v8a5 5 0 0 0 5 5h2M13 5v11a1 1 0 0 0 1 1h6M18 9v4h4"
-          stroke="white"
-          strokeWidth="2.3"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <img
+        className="brand-icon"
+        src={brandIcon}
+        width="28"
+        height="28"
+        alt=""
+        aria-hidden="true"
+      />
       <span>
         tuck<span className="brand-dot">.</span>
       </span>
@@ -246,6 +244,17 @@ export default function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("meeting");
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const close = (event: PointerEvent) => { if (!newMenuRef.current?.contains(event.target as Node)) setNewMenuOpen(false); };
+    document.addEventListener("pointerdown",close);
+    return () => document.removeEventListener("pointerdown",close);
+  }, [newMenuOpen]);
+  const [searchFocus, setSearchFocus] = useState(0);
+  const [searchScope, setSearchScope] = useState<LibraryScope>({folder:"",tag:"",person:""});
+  const [taskScope, setTaskScope] = useState<LibraryScope>({folder:"",tag:"",person:""});
   const [settingsSection, setSettingsSection] = useState("Intelligence");
   const [tab, setTab] = useState<Tab>("summary");
   const [pane, setPane] = useState<MobilePane>("document");
@@ -354,7 +363,7 @@ export default function App() {
   const noteSaves = useRef(new Map<string, Promise<boolean>>());
   const noteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
@@ -673,8 +682,9 @@ export default function App() {
     const handle = (e: globalThis.KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setPane("library");
-        searchRef.current?.focus();
+        setView("library");
+        setPane("document");
+        setSearchFocus(value => value + 1);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
@@ -682,6 +692,8 @@ export default function App() {
         setPane("document");
       }
       if (e.key === "Escape") {
+        if (newMenuRef.current?.open) newMenuRef.current.querySelector("summary")?.focus();
+        setNewMenuOpen(false);
         setShowExport(false);
         setShowMore(false);
         setRenameSpeaker(null);
@@ -1360,7 +1372,7 @@ export default function App() {
       className={`app-shell mobile-${pane}${!assistantOpen || dictation ? " assistant-hidden" : ""}${view !== "meeting" ? " settings-active" : ""}`}
     >
       <GlobalDictationAnnouncer controller={globalDictation} />
-      <aside className="sidebar" aria-label="Conversation library">
+      <aside className="sidebar" aria-label="Workspace navigation">
         <div className="sidebar-tools">
           <div className="sidebar-brand">
             <Brand />
@@ -1373,89 +1385,37 @@ export default function App() {
               <X size={18} />
             </button>
           </div>
-          <button
-            className="new-conversation"
-            onClick={create}
-            disabled={!!busy}
-          >
-            <Plus size={17} />
-            <span>New meeting</span>
-            <span className="new-shortcut" aria-hidden="true">
-              +
-            </span>
+          <details ref={newMenuRef} className="new-menu" open={newMenuOpen}>
+            <summary className="new-conversation" onClick={e => {e.preventDefault();setNewMenuOpen(value => !value);}}><Plus size={17} /><span>New</span><ChevronDown size={15} /></summary>
+            <div className="new-options" role="group" aria-label="Create in Tuck">
+              <button disabled={!!busy} onClick={() => {setNewMenuOpen(false); void create();}}><Plus size={16} />New meeting</button>
+              <button disabled={!!busy || !!capture || !!status.activeMeetingId} onClick={() => {setNewMenuOpen(false); void dictate();}}><Mic size={16} />Voice note</button>
+              <button disabled={!!busy} onClick={() => {setNewMenuOpen(false); void importAudio();}}><Upload size={16} />Import audio…</button>
+            </div>
+          </details>
+          <button aria-label="Search library" className={`sidebar-search-action${view === "library" ? " is-active" : ""}`} onClick={() => {setView("library");setPane("document");setSearchFocus(value => value + 1);}}>
+            <Search size={16} /><span>Search library</span><kbd>⌘ K</kbd>
           </button>
-          <button className="dictate-action" onClick={dictate} disabled={!!busy || !!capture || !!status.activeMeetingId}>
-            <Mic size={15} /><span>Dictate a note</span>
-          </button>
-          <label className="library-search">
-            <Search size={15} />
-            <input
-              ref={searchRef}
-              aria-label="Search conversations"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search anything…"
-            />
-            <kbd>⌘ K</kbd>
-          </label>
-          <nav className="library-nav" aria-label="Library filters">
-            <button
-              className={
-                filter === "all" && view === "meeting" ? "selected" : ""
-              }
-              onClick={() => {
-                setFilter("all");
-                setView("meeting");
-              }}
-            >
-              <Library size={16} />
-              <span>All conversations</span>
-              <span className="count">{library.overview.meetingCount}</span>
+          <nav className="library-nav" aria-label="Main navigation">
+            <button className={view === "meeting" || view === "library" ? "selected" : ""} aria-current={view === "meeting" || view === "library" ? "page" : undefined} onClick={() => {setView("meeting");setPane("library");}}>
+              <Library size={16} /><span>Library</span><span className="count">{library.overview.meetingCount}</span>
             </button>
-            <button
-              className={
-                filter === "starred" && view === "meeting" ? "selected" : ""
-              }
-              onClick={() => {
-                setFilter("starred");
-                setView("meeting");
-              }}
-            >
-              <Star size={16} />
-              <span>Starred</span>
-              {library.overview.starredCount > 0 && (
-                <span className="count">{library.overview.starredCount}</span>
-              )}
-            </button>
-            <button
-              className={view === "library" ? "selected" : ""}
-              onClick={() => {
-                setView("library");
-                setPane("document");
-              }}
-            >
-              <Search size={16} />
-              <span>Ask your library</span>
-            </button>
-            <button
-              className={view === "tasks" ? "selected" : ""}
-              onClick={() => {
-                setView("tasks");
-                setPane("document");
-              }}
-            >
-              <Check size={16} />
-              <span>Tasks</span>
-              <span className="count">{library.overview.openTaskCount}</span>
+            <button className={view === "tasks" ? "selected" : ""} aria-current={view === "tasks" ? "page" : undefined} onClick={() => {setView("tasks");setPane("document");}}>
+              <Check size={16} /><span>Tasks</span><span className="count">{library.overview.openTaskCount}</span>
             </button>
           </nav>
-          <ScopeFilters
-            library={library.overview}
-            scope={scope}
-            onChange={setScope}
-          />
+          {(capture?.id || status.activeMeetingId) && view !== "meeting" && <button className="sidebar-capture-return" onClick={() => choose((capture?.id || status.activeMeetingId)!)}><AudioLines size={16} />Return to active recording</button>}
+          {view === "meeting" && <div className="library-list-tools">
+            <div className="library-list-filters" role="group" aria-label="Saved item filters">
+              <button aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All <span>{library.overview.meetingCount}</span></button>
+              <button aria-pressed={filter === "starred"} onClick={() => setFilter("starred")}>Starred <span>{library.overview.starredCount}</span></button>
+            </div>
+            <label className="library-search"><input aria-label="Filter saved items" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter saved items…" /></label>
+            <ScopeFilters library={library.overview} scope={scope} onChange={setScope} />
+          </div>}
         </div>
-        <div className="meeting-list">
+        {view === "meeting" ? <div className="meeting-list">
+
           {library.error && (
             <div className="library-load-state" role="alert">
               <p>{library.error}</p>
@@ -1494,7 +1454,7 @@ export default function App() {
                         {m.status === "recording" ? (
                           <AudioLines size={16} />
                         ) : (
-                          <FileText size={15} />
+                          m.kind === "dictation" ? <Mic size={15} /> : <FileText size={15} />
                         )}
                       </span>
                       <span className="meeting-item-title">{m.title}</span>
@@ -1551,18 +1511,8 @@ export default function App() {
               )}
             </div>
           )}
-        </div>
+        </div> : <div className="sidebar-context"><p>{view === "tasks" ? "Tasks across your library" : view === "library" ? "Search passages or ask Tuck" : "Workspace preferences"}</p><button className="text-link" onClick={() => {setView("meeting");setPane("library");}}>Browse saved items</button></div>}
         <div className="sidebar-bottom">
-          <button
-            className="sidebar-link"
-            onClick={importAudio}
-            disabled={!!busy}
-          >
-            <Upload size={16} />
-            <span>
-              {busy === "import" ? "Importing audio…" : "Import audio"}
-            </span>
-          </button>
           <button
             className={`sidebar-link${view === "settings" ? " selected" : ""}`}
             onClick={() => {
@@ -1574,20 +1524,7 @@ export default function App() {
             <span>Settings</span>
             <kbd>⌘ ,</kbd>
           </button>
-          <div className="local-workspace">
-            <span className="local-lock">
-              <ShieldCheck size={17} />
-            </span>
-            <div>
-              <strong>Local workspace</strong>
-              <small>
-                {native
-                  ? "Stored on this device"
-                  : "Illustrative browser preview"}
-              </small>
-            </div>
-            <span className="status-dot" />
-          </div>
+          <div className="local-workspace-compact"><ShieldCheck size={14} /><span>{native ? "Stored on this device" : "Browser preview"}</span></div>
         </div>
       </aside>
       <main className="workspace">
@@ -1604,10 +1541,10 @@ export default function App() {
               {view === "settings"
                 ? "Settings"
                 : view === "library"
-                  ? "Ask your library"
+                  ? "Search library"
                   : view === "tasks"
                     ? "Tasks"
-                    : "Conversations"}
+                    : "Library"}
             </span>
             {meeting && view === "meeting" && (
               <>
@@ -1678,12 +1615,14 @@ export default function App() {
         ) : view === "library" || view === "tasks" ? (
           <div className="document-scroll">
             <LibraryDesk
-              key={JSON.stringify(scope)}
+              key={view + JSON.stringify(view === "tasks" ? taskScope : searchScope)}
               mode={view}
+              focusRequest={searchFocus}
+              onScopeChange={view === "tasks" ? setTaskScope : setSearchScope}
               library={library.overview}
               revision={library.revision}
               settings={settings}
-              scope={scope}
+              scope={view === "tasks" ? taskScope : searchScope}
               onSource={openSource}
               merge={merge}
               notify={notify}
@@ -2727,7 +2666,7 @@ export default function App() {
               <span className="assistant-symbol">
                 <Sparkles size={16} />
               </span>
-              <h2>Ask Tuck</h2>
+              <h2>Ask about this meeting</h2>
             </div>
             <button
               className="icon-button"
@@ -2939,7 +2878,7 @@ export default function App() {
           onClick={() => setPane("document")}
         >
           <FileText size={18} />
-          {view === "settings" ? "Settings" : "Conversation"}
+          {view === "settings" ? "Settings" : view === "tasks" ? "Tasks" : view === "library" ? "Search" : "Conversation"}
         </button>
         {!dictation && <button
           aria-current={pane === "assistant" ? "page" : undefined}
@@ -2950,7 +2889,7 @@ export default function App() {
           }}
         >
           <Sparkles size={18} />
-          Ask Tuck
+          Assistant
         </button>}
       </nav>
       {toast && (
