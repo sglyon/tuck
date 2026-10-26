@@ -143,7 +143,7 @@ test("shortcut recorder cancels, rejects unmodified keys and captures app shortc
   await fixture(page); await settings(page);
   const area=region(page);
   await recordShortcut(page,"KeyD");
-  await expect(area.getByText("Include Command, Control, or Option/Alt with a key.")).toBeVisible();
+  await expect(area.getByText("Use a function key on its own, or add Command, Control, or Option/Alt.")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(area.getByText("Shortcut recording canceled.")).toBeVisible();
   await expect(area.getByRole("status").filter({hasText:"Shortcut recording canceled"})).toBeVisible();
@@ -168,4 +168,18 @@ test("recorder handles registered native shortcuts and cancels on blur",async({p
   await expect(area.getByRole("button",{name:"Record shortcut",exact:true})).toBeVisible();
   await expect.poll(async()=>page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="shortcut_recorder").at(-1)?.params.active)).toBe(false);
   expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_toggle"))).toEqual([]);
+});
+
+test("F20 can be recorded and saved without a modifier",async({page})=>{
+  await fixture(page); await settings(page);
+  const area=region(page);
+  await area.getByRole("button",{name:"Record shortcut",exact:true}).click();
+  await expect(area.getByText("Press your shortcut now. Escape cancels.")).toBeVisible();
+  // Playwright's keyboard table stops at F12; dispatch the extended function key.
+  await page.evaluate(()=>window.dispatchEvent(new KeyboardEvent("keydown",{key:"F20",code:"F20",bubbles:true,cancelable:true})));
+  await expect(area.locator("output")).toHaveText("F20");
+  await area.getByRole("button",{name:"Save dictation settings"}).click();
+  await expect(area.getByText("Dictation settings saved on this device.")).toBeVisible();
+  await expect(area.locator("kbd")).toHaveText("F20");
+  expect(await page.evaluate(()=>(window as any).__dictationCalls.filter((c:any)=>c.method==="global_dictation_configure").at(-1).params.shortcut)).toBe("F20");
 });

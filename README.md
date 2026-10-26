@@ -135,4 +135,4 @@ Configure global dictation in Settings → Audio & models → Dictation anywhere
 
 Library and Tasks are the main navigation destinations. Use New for a meeting, voice note or audio import. Search library (Cmd/Ctrl-K) offers local keyword search and Ask Tuck across saved items. All/Starred and list filters affect saved-item browsing; search and tasks have independent filters.
 
-To change the global dictation shortcut, open Settings → Audio & models, click **Record shortcut**, and press the desired key chord. Escape or leaving the recorder cancels capture. Click **Save dictation settings** to apply it.
+To change the global dictation shortcut, open Settings → Audio & models, click **Record shortcut**, and press the desired key chord. Function keys such as F20 work without modifiers. Escape or leaving the recorder cancels capture. Click **Save dictation settings** to apply it.

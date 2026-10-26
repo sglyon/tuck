@@ -27,7 +27,8 @@ export default function ShortcutRecorder({ value, disabled, mac, onChange }: {
       if (!live) return;
       const parts = shortcut.toLowerCase().split("+");
       const primary = parts.some(p => ["super", "meta", "command", "commandorcontrol", "control", "ctrl", "alt", "option"].includes(p));
-      if (!primary) { setMessage("Include Command, Control, or Option/Alt with a key."); return; }
+      const functionKey = parts.some(p => /^f([1-9]|1[0-9]|2[0-4])$/.test(p));
+      if (!primary && !functionKey) { setMessage("Use a function key on its own, or add Command, Control, or Option/Alt."); return; }
       if (parts.includes("shift") && parts.some(p => [mac ? "super" : "control", "commandorcontrol", mac ? "command" : "ctrl"].includes(p)) && parts.some(p => p === "r" || p === "keyr")) {
         setMessage("That shortcut starts a meeting. Choose another shortcut for dictation."); return;
       }
@@ -84,6 +85,6 @@ export default function ShortcutRecorder({ value, disabled, mac, onChange }: {
         {recording ? "Cancel recording" : "Record shortcut"}
       </button>
     </div>
-    <p id="dictation-shortcut-help" className="quiet-note" role="status">{recording ? (message || (ready ? "Press your shortcut now. Escape cancels." : "Preparing shortcut recorder…")) : (message || "Record a key with Command, Control, or Option/Alt, then save your settings.")}</p>
+    <p id="dictation-shortcut-help" className="quiet-note" role="status">{recording ? (message || (ready ? "Press your shortcut now. Escape cancels." : "Preparing shortcut recorder…")) : (message || "Press a function key on its own, or a key with Command, Control, or Option/Alt.")}</p>
   </div>;
 }

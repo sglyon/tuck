@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
-use tauri_plugin_global_shortcut::{Modifiers, Shortcut};
+use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 use tuck_core::{ports::Result, AppError};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,12 +29,40 @@ impl Config {
             return Err(AppError::invalid("The shortcut is too long."));
         }
         let key = config.key()?;
-        if !key
-            .mods
-            .intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER)
+        let function_key = matches!(
+            key.key,
+            Code::F1
+                | Code::F2
+                | Code::F3
+                | Code::F4
+                | Code::F5
+                | Code::F6
+                | Code::F7
+                | Code::F8
+                | Code::F9
+                | Code::F10
+                | Code::F11
+                | Code::F12
+                | Code::F13
+                | Code::F14
+                | Code::F15
+                | Code::F16
+                | Code::F17
+                | Code::F18
+                | Code::F19
+                | Code::F20
+                | Code::F21
+                | Code::F22
+                | Code::F23
+                | Code::F24
+        );
+        if !function_key
+            && !key
+                .mods
+                .intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER)
         {
             return Err(AppError::invalid(
-                "Include Command, Control, or Option/Alt in the shortcut.",
+                "Use a function key on its own, or add Command, Control, or Option/Alt.",
             ));
         }
         if key.id()
@@ -50,7 +78,7 @@ impl Config {
     }
     pub fn key(&self) -> Result<Shortcut> {
         Shortcut::from_str(&self.shortcut)
-            .map_err(|_| AppError::invalid("Choose a valid shortcut with one key and modifiers."))
+            .map_err(|_| AppError::invalid("Choose a valid function key or a key with modifiers."))
     }
 }
 
@@ -155,6 +183,16 @@ mod tests {
         assert!(!apply(&old, &off, &f, || Ok(())).unwrap());
         assert!(f.keys.borrow().is_empty());
         assert!(apply(&off, &old, &f, || Ok(())).unwrap());
+    }
+    #[test]
+    fn function_keys_work_without_modifiers() {
+        for shortcut in ["F1", "F12", "F13", "F20", "F24"] {
+            let config = Config::from_value(
+                &serde_json::json!({"enabled":true,"shortcut":shortcut,"autoPaste":false}),
+            )
+            .unwrap();
+            assert_eq!(config.shortcut, shortcut);
+        }
     }
     #[test]
     fn validates_modifiers_and_reserves_the_meeting_shortcut() {

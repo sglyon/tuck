@@ -41,6 +41,6 @@ Global-controller and delivery tests use synthetic recording/field/clipboard ada
 
 ## User configuration
 
-Settings → Audio & models → Dictation anywhere exposes enable/disable, shortcut modifiers and key, and automatic paste versus clipboard-only. Changes apply when saved and persist locally in SQLite under `globalDictation`. Existing libraries default to enabled, CommandOrControl+Shift+Space, and automatic paste. In-app voice notes are independent of the global enable switch.
+Settings → Audio & models → Dictation anywhere exposes enable/disable, a recorded shortcut (F1–F24 work without modifiers), and automatic paste versus clipboard-only. Changes apply when saved and persist locally in SQLite under `globalDictation`. Existing libraries default to enabled, CommandOrControl+Shift+Space, and automatic paste. In-app voice notes are independent of the global enable switch.
 
 `global_dictation_configure {enabled,shortcut,autoPaste}` validates the key combination, preserves the meeting-recording shortcut, and rejects changes during a prepared or active dictation action. Native registration reserves the replacement before releasing the old shortcut; conflicts and failed persistence roll back. Disabling releases the shortcut. Clipboard-only mode does not capture a focused field and never sends a paste. The status/event DTO adds `enabled` and `autoPaste`; `shortcut` reflects the saved preference. No model download, recording or permission prompt is triggered by saving preferences.
