@@ -762,6 +762,25 @@ struct DeviceSelection {
     microphone: String,
     system: String,
 }
+// Only idle, successfully used recognizers are reusable. A generation prevents
+// an in-flight worker from restoring a model after unload/install/shutdown.
+struct WarmSpeech<T> {
+    generation: u64,
+    ready: Option<(u32, T)>,
+}
+impl<T> Default for WarmSpeech<T> {
+    fn default() -> Self { Self { generation: 0, ready: None } }
+}
+impl<T> WarmSpeech<T> {
+    fn take(&mut self, threads: u32) -> (u64, Option<T>) {
+        (self.generation, self.ready.take().and_then(|(key, runtime)| (key == threads).then_some(runtime)))
+    }
+    fn put(&mut self, generation: u64, threads: u32, runtime: T) {
+        if self.generation == generation { self.ready = Some((threads, runtime)); }
+    }
+    fn clear(&mut self) { self.generation = self.generation.wrapping_add(1); self.ready = None; }
+}
+
 pub struct CaptureEngine {
     devices: Mutex<DeviceSelection>,
     diarization: Mutex<bool>,
@@ -771,6 +790,7 @@ pub struct CaptureEngine {
     context: Context,
     operation: Mutex<()>,
     session: Mutex<Option<Session>>,
+    warm_speech: Arc<Mutex<WarmSpeech<SpeechRuntime>>>,
 }
 impl CaptureEngine {
     pub fn new(data_dir: PathBuf, resources_dir: PathBuf, emit: Emit) -> Self {
@@ -790,8 +810,29 @@ impl CaptureEngine {
             },
             operation: Mutex::new(()),
             session: Mutex::new(None),
+            warm_speech: Arc::new(Mutex::new(WarmSpeech::default())),
         }
     }
+    /// Load verified local weights only; never opens an audio stream or requests
+    /// permission. Host activation is explicit so diagnostic composition is inert.
+    pub fn prewarm_dictation(self: &Arc<Self>, threads: u32) {
+        if !self.models.installed("parakeet") { return; }
+        let engine = self.clone();
+        let generation = lock(&self.warm_speech).generation;
+        let _ = thread::Builder::new().name("tuck-dictation-warmup".into()).spawn(move || {
+            let _operation = lock(&engine.operation);
+            if lock(&engine.session).is_some() { return; }
+            let threads = threads.clamp(1, 4);
+            {
+                let cache = lock(&engine.warm_speech);
+                if cache.generation != generation || cache.ready.as_ref().is_some_and(|(key, _)| *key == threads) { return; }
+            }
+            if let Ok(runtime) = SpeechRuntime::load(&engine.models, threads, false) {
+                lock(&engine.warm_speech).put(generation, threads, runtime);
+            }
+        });
+    }
+    pub fn clear_dictation_warmth(&self) { lock(&self.warm_speech).clear(); }
     fn stop_inner(&self) -> Result<f64> {
         let duration = {
             let mut state = lock(&self.context.state);
@@ -910,10 +951,34 @@ impl RecordingPort for CaptureEngine {
         let diarization = *lock(&self.diarization);
         let context = self.context.clone();
         let id = meeting.to_owned();
-        let inference=thread::Builder::new().name("tuck-local-speech".into()).spawn(move||{
-            let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||->Result<()>{let runtime=SpeechRuntime::load(&models,threads,diarization)?;let mut segmenters=HashMap::new();for (source,enabled)in [("microphone",microphone),("system",system)]{if enabled{segmenters.insert(source,Segmenter::new(&models.vad_path())?);}}let mut pipeline=SpeechPipeline{runtime,segmenters,meeting:id,on_segment};let _=ready_tx.send(Ok(()));inference_loop(work_rx,&mut pipeline)})).unwrap_or_else(|_|Err(error("Local transcription failed. The original audio has been preserved for recovery.")));
-            if let Err(e)=&result{let _=ready_tx.send(Err(e.clone()));context.fail(e.clone());}let _=done_tx.send(result);
-        }).map_err(|_|error("The speech worker could not start."))?;
+        let warm_speech = self.warm_speech.clone();
+        let inference = thread::Builder::new().name("tuck-local-speech".into()).spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+                let key = threads.clamp(1, 4);
+                let (generation, warmed) = if diarization { (0, None) } else { lock(&warm_speech).take(key) };
+                let warmed = warmed.and_then(|mut runtime| runtime.is_alive().then_some(runtime));
+                let runtime = match warmed {
+                    Some(runtime) => runtime,
+                    None => SpeechRuntime::load(&models, threads, diarization)?,
+                };
+                // The recognizer is resident, but each VAD is loaded afresh.
+                models.verify_vad()?;
+                let mut segmenters = HashMap::new();
+                for (source, enabled) in [("microphone", microphone), ("system", system)] {
+                    if enabled { segmenters.insert(source, Segmenter::new(&models.vad_path())?); }
+                }
+                let mut pipeline = SpeechPipeline { runtime, segmenters, meeting: id, on_segment };
+                let _ = ready_tx.send(Ok(()));
+                let result = inference_loop(work_rx, &mut pipeline);
+                if result.is_ok() && !diarization {
+                    pipeline.runtime.reset_session();
+                    lock(&warm_speech).put(generation, key, pipeline.runtime);
+                }
+                result
+            })).unwrap_or_else(|_| Err(error("Local transcription failed. The original audio has been preserved for recovery.")));
+            if let Err(e) = &result { let _ = ready_tx.send(Err(e.clone())); context.fail(e.clone()); }
+            let _ = done_tx.send(result);
+        }).map_err(|_| error("The speech worker could not start."))?;
         let ready = ready_rx
             .recv_timeout(Duration::from_secs(200))
             .map_err(|_| error("The speech model did not load in time."));
@@ -1012,8 +1077,11 @@ impl RecordingPort for CaptureEngine {
     }
     fn shutdown(&self) -> Result<()> {
         let _operation = lock(&self.operation);
+        self.clear_dictation_warmth();
         if lock(&self.session).is_some() {
-            self.stop_inner().map(|_| ())
+            let result = self.stop_inner().map(|_| ());
+            self.clear_dictation_warmth();
+            result
         } else {
             Ok(())
         }
@@ -1023,6 +1091,7 @@ impl RecordingPort for CaptureEngine {
         if lock(&self.session).is_some() {
             return Err(error("Stop recording before unloading speech models."));
         }
+        self.clear_dictation_warmth();
         Ok(())
     }
     fn install_model(&self, kind: &str) -> Result<Value> {
@@ -1030,6 +1099,7 @@ impl RecordingPort for CaptureEngine {
         if lock(&self.session).is_some() {
             return Err(error("Stop recording before installing a model."));
         }
+        self.clear_dictation_warmth();
         self.models.install(kind)
     }
     fn import_file(
@@ -1137,6 +1207,41 @@ impl RecordingPort for CaptureEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn warmed_engine_is_exclusive_and_invalidated_by_settings_or_unload() {
+        let mut cache = WarmSpeech::default();
+        let (generation, empty) = cache.take(2);
+        assert_eq!(empty, None::<String>);
+        cache.put(generation, 2, "verified engine".into());
+        let (generation, first) = cache.take(2);
+        assert_eq!(first.as_deref(), Some("verified engine"));
+        assert!(cache.take(2).1.is_none(), "a recognizer must have one owner");
+        cache.put(generation, 2, first.unwrap());
+        assert!(cache.take(4).1.is_none(), "thread changes must rebuild the engine");
+        cache.put(generation, 2, "old engine".into());
+        cache.clear();
+        cache.put(generation, 2, "late worker".into());
+        assert!(cache.take(2).1.is_none(), "unload must reject late returns");
+    }
+    #[test]
+    #[ignore = "requires explicitly provisioned local speech weights; does not open the microphone"]
+    fn benchmark_dictation_model_startup() {
+        let data = PathBuf::from(std::env::var_os("TUCK_BENCH_DATA").expect("Set TUCK_BENCH_DATA to an existing model installation"));
+        let engine = CaptureEngine::new(data, PathBuf::new(), Arc::new(|_, _| {}));
+        let cold = Instant::now();
+        let runtime = SpeechRuntime::load(&engine.models, 2, false).unwrap();
+        let cold_ms = cold.elapsed().as_secs_f64() * 1000.0;
+        lock(&engine.warm_speech).put(0, 2, runtime);
+        let hot = Instant::now();
+        let (_, runtime) = lock(&engine.warm_speech).take(2);
+        assert!(runtime.is_some());
+        engine.models.verify_vad().unwrap();
+        let _vad = Segmenter::new(&engine.models.vad_path()).unwrap();
+        let warm_ms = hot.elapsed().as_secs_f64() * 1000.0;
+        let ready = Instant::now();
+        let _ = engine.readiness_for_dictation().unwrap();
+        println!("dictation startup: cold_model_ms={cold_ms:.1} warm_model_and_vad_ms={warm_ms:.1} device_readiness_ms={:.1}", ready.elapsed().as_secs_f64()*1000.0);
+    }
     #[test]
     fn folder_paths_reject_traversal() {
         let temp = tempfile::tempdir().unwrap();
@@ -1519,7 +1624,7 @@ impl CaptureEngine {
         }
         // Status only: the helper must never request permission for readiness.
         #[cfg(target_os = "macos")]
-        let permissions = super::calendar::run_helper("permissions", &[], Duration::from_secs(3))
+        let permissions = super::calendar::run_helper(if system_audio { "permissions" } else { "microphone-permission" }, &[], Duration::from_secs(3))
             .unwrap_or_else(|_| json!({"microphone":"unknown","system":false}));
         #[cfg(not(target_os = "macos"))]
         let permissions = json!({"microphone":"unknown","system":true});

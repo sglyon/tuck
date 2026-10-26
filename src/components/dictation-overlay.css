@@ -1,0 +1,11 @@
+.dictation-overlay-window, .dictation-overlay-window body, .dictation-overlay-window #root {
+  width: 100%; height: 100%; min-width: 0; margin: 0; overflow: hidden; background: #003da5;
+}
+.dictation-hud { box-sizing: border-box; display: flex; align-items: center; gap: 14px; width: 100%; height: 100%; padding: 14px 20px; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; user-select: none; }
+.dictation-hud-icon { display: flex; align-items: center; justify-content: center; width: 30px; flex-shrink: 0; }
+.dictation-hud-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.dictation-hud strong { font-size: 15px; line-height: 20px; font-weight: 600; }
+.dictation-hud span { color: #e0ebff; font-size: 12px; line-height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dictation-hud-spin { animation: dictation-hud-turn 1.2s linear infinite; }
+@keyframes dictation-hud-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .dictation-hud-spin { animation: none; } }

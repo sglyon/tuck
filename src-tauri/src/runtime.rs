@@ -27,6 +27,15 @@ pub struct DesktopRuntime {
     notion_auth: Arc<NotionAuth>,
 }
 impl DesktopRuntime {
+    /// The desktop host opts into model-only warmup; no microphone is opened.
+    pub fn sync_dictation_warmth(&self) {
+        if self.dictation.configuration().enabled {
+            if let Ok(settings) = self.service.get_settings() {
+                self.capture.prewarm_dictation(settings["threads"].as_u64().unwrap_or(2) as u32);
+            }
+        } else { self.capture.clear_dictation_warmth(); }
+    }
+
     /// Called on the native shortcut callback before spawning capture work.
     pub fn dispatch_dictation(self: &Arc<Self>) {
         let target = match self.dictation.prepare_target() {

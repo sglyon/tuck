@@ -234,6 +234,15 @@ fn load_speaker_extractor(
     ))
 }
 impl SpeechRuntime {
+    pub fn is_alive(&mut self) -> bool {
+        match &mut self.recognizer {
+            Recognizer::Apple(engine) => engine.child.try_wait().is_ok_and(|status| status.is_none()),
+            Recognizer::Cpu(_) => true,
+        }
+    }
+    pub fn reset_session(&mut self) {
+        self.clusters = SpeakerClusters::default();
+    }
     pub fn load(models: &ModelManager, threads: u32, diarization: bool) -> Result<Self> {
         let recognizer = match models.verify()? {
             BackendModels::Apple(path) => Recognizer::Apple(AppleRecognizer::load(&path)?),

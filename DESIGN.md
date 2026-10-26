@@ -202,3 +202,5 @@ Library and Tasks are the two primary destinations. New is a disclosure for New 
 Dictation anywhere settings use explicit Save, with enable, recorded shortcut, automatic paste and Restore defaults. Settings stay disabled while a dictation action is prepared or active. Clipboard-only mode describes its effect and hides automatic-paste permission setup.
 
 Function keys F1–F24 may be used without modifiers; ordinary typing keys require Command, Control, or Option/Alt. The dictation shortcut uses an explicit key-chord recorder with Escape/blur cancellation, inline validation, and Save to apply. Existing native dictation and meeting shortcuts are routed to the recorder while it is active in the focused app.
+
+Global dictation shows a read-only, click-through floating indicator at the bottom of the current screen. It never takes keyboard focus. Preparing, Listening and Transcribing stay visible; Copied/Paste sent disappears after three seconds, errors after seven. No dictated text is shown.

@@ -1,0 +1,10 @@
+{
+  "identifier": "dictation-overlay",
+  "windows": [
+    "dictation-overlay"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

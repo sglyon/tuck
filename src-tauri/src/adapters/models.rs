@@ -155,13 +155,16 @@ impl ModelManager {
     pub fn status(&self) -> Value {
         json!({"modelInstalled":self.installed("parakeet"),"speakerModelInstalled":self.installed("speakers"),"modelDownloading":self.downloading.load(Ordering::Acquire),"modelProgress":*self.progress.lock().unwrap_or_else(|p|p.into_inner()),"speechBackend":if self.apple_installed(){"coreml"}else{"cpu"}})
     }
+    pub fn verify_vad(&self) -> Result<()> {
+        verify_file(&self.vad_path(), VAD_HASH)
+    }
     pub fn verify(&self) -> Result<BackendModels> {
         if !self.installed("parakeet") {
             return Err(error(
                 "Install Parakeet in Settings before recording or importing audio.",
             ));
         }
-        verify_file(&self.vad_path(), VAD_HASH)?;
+        self.verify_vad()?;
         if self.apple_installed() {
             for f in apple_manifest()?.files {
                 verify_file(&self.apple_dir().join(&f.path), &f.sha256)?;

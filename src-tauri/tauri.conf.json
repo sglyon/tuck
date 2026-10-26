@@ -18,6 +18,25 @@
         "minWidth": 760,
         "minHeight": 560,
         "backgroundColor": "#f5f6f8"
+      },
+      {
+        "label": "dictation-overlay",
+        "title": "Tuck dictation",
+        "url": "index.html?dictation-overlay",
+        "width": 320,
+        "height": 76,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "decorations": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visibleOnAllWorkspaces": true,
+        "backgroundColor": "#003DA5"
       }
     ],
     "security": {

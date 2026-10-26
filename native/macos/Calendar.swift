@@ -18,10 +18,12 @@ import CoreGraphics
     @MainActor static func main() async {
         let args = Array(CommandLine.arguments.dropFirst())
         switch args.first {
-        case "permissions":
+        case "permissions", "microphone-permission":
             let mic = AVCaptureDevice.authorizationStatus(for: .audio)
             let value = mic == .authorized ? "authorized" : mic == .notDetermined ? "notDetermined" : mic == .denied ? "denied" : "restricted"
-            send(["microphone":value,"system":CGPreflightScreenCaptureAccess()])
+            // Dictation must not wait on the unrelated system-audio TCC check.
+            let system = args[0] == "permissions" ? CGPreflightScreenCaptureAccess() : false
+            send(["microphone":value,"system":system])
         case "request-microphone":
             let allowed = await AVCaptureDevice.requestAccess(for: .audio)
             send(["granted":allowed])

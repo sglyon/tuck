@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod dictation_overlay;
+
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -99,10 +101,14 @@ fn intent(app: &tauri::AppHandle, action: &str) {
 #[tauri::command]
 async fn engine_call(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     state: tauri::State<'_, RuntimeState>,
     method: String,
     params: Option<Value>,
 ) -> Result<Value, String> {
+    if window.label() == "dictation-overlay" && method != "global_dictation_status" {
+        return Err("The dictation indicator is read-only.".into());
+    }
     let params = params.unwrap_or_else(|| json!({}));
     if method.len() > 80
         || !params.is_object()
@@ -154,6 +160,7 @@ async fn engine_call(
             });
             if result.is_ok() {
                 state_key_reset(&app);
+                service.sync_dictation_warmth();
             } else {
                 let config = service.dictation.configuration();
                 service.dictation.registered(config.enabled && config.key().is_ok_and(|key| app.global_shortcut().is_registered(key)));
@@ -251,9 +258,14 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
+            app.manage(dictation_overlay::State::default());
+            if let Some(overlay) = app.get_webview_window("dictation-overlay") {
+                overlay.set_ignore_cursor_events(true)?;
+            }
             let handle = app.handle().clone();
             let emit = Arc::new(move |event: &str, payload: Value| {
                 if event == "global_dictation_updated" {
+                    dictation_overlay::update(&handle, &payload);
                     let title = match payload["state"].as_str() {
                         Some("starting") => Some("… Preparing"),
                         Some("listening") => Some("● Dictating"),
@@ -407,6 +419,7 @@ fn main() {
                 if let Err(error) = runtime.start_reminders(notifications) {
                     eprintln!("Tuck meeting reminders unavailable: {}", error.message);
                 }
+                runtime.sync_dictation_warmth();
                 if let Err(error) = runtime.start_coaching() {
                     eprintln!("Tuck live coach unavailable: {}", error.message);
                 }
@@ -414,6 +427,7 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() != "main" { return; }
             if matches!(event, tauri::WindowEvent::Focused(false) | tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(state) = window.app_handle().try_state::<RuntimeState>() {
                     state.shortcut_recorder.store(false, Ordering::Release);

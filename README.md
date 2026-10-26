@@ -136,3 +136,7 @@ Configure global dictation in Settings → Audio & models → Dictation anywhere
 Library and Tasks are the main navigation destinations. Use New for a meeting, voice note or audio import. Search library (Cmd/Ctrl-K) offers local keyword search and Ask Tuck across saved items. All/Starred and list filters affect saved-item browsing; search and tasks have independent filters.
 
 To change the global dictation shortcut, open Settings → Audio & models, click **Record shortcut**, and press the desired key chord. Function keys such as F20 work without modifiers. Escape or leaving the recorder cancels capture. Click **Save dictation settings** to apply it.
+
+Global dictation shows a read-only, click-through floating indicator at the bottom of the current screen. It never takes keyboard focus. Preparing, Listening and Transcribing stay visible; Copied/Paste sent disappears after three seconds, errors after seven. No dictated text is shown.
+
+When global dictation is enabled, the desktop host prepares the verified local speech engine in the background and reuses it between dictations. This keeps model loading off the usual shortcut path; the microphone remains closed until explicitly started. Unload, model installation, disabling global dictation, and shutdown discard the idle engine. An immediate first use during warmup can still wait for initialization.
