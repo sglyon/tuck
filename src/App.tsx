@@ -94,6 +94,7 @@ import type {
   GlobalDictationStatus,
   ExportFormat,
   Meeting,
+  MeetingHeader,
   MeetingChanges,
   Message,
   Segment,
@@ -1333,7 +1334,46 @@ export default function App() {
     }
   };
   const shown = library.headers;
-  const groups = [...new Set(shown.map((m) => relativeGroup(m.createdAt)))];
+  const renderMeetingGroups = (items: MeetingHeader[]) =>
+    [...new Set(items.map((m) => relativeGroup(m.createdAt)))].map((group) => (
+      <section key={group}>
+        <h2>{group}</h2>
+        {items
+          .filter((m) => relativeGroup(m.createdAt) === group)
+          .map((m) => (
+            <button
+              key={m.id}
+              className={`meeting-item${selectedId === m.id && view === "meeting" ? " selected" : ""}`}
+              onClick={() => choose(m.id)}
+            >
+              <div className="meeting-item-top">
+                <span
+                  className={`meeting-state-icon ${m.status === "recording" ? "recording" : ""}`}
+                >
+                  {m.status === "recording" ? (
+                    <AudioLines size={16} />
+                  ) : (
+                    m.kind === "dictation" ? <Mic size={15} /> : <FileText size={15} />
+                  )}
+                </span>
+                <span className="meeting-item-title">{m.title}</span>
+                {m.starred && <Star className="filled-star" size={12} />}
+              </div>
+              <span className="meeting-item-meta">
+                {m.isExample
+                  ? "Example conversation"
+                  : m.status === "recording"
+                    ? "Recording now"
+                    : m.status === "paused"
+                      ? "Paused"
+                      : m.status === "processing"
+                        ? "Finishing transcript…"
+                        : `${meetingDate(m.createdAt)} · ${duration(m.duration)}`}
+              </span>
+            </button>
+          ))}
+      </section>
+    ));
   const visibleSegments =
     meeting?.segments.filter(
       (s) =>
@@ -1436,45 +1476,17 @@ export default function App() {
             notify={notify}
           />
 
-          {groups.map((group) => (
-            <section key={group}>
-              <h2>{group}</h2>
-              {shown
-                .filter((m) => relativeGroup(m.createdAt) === group)
-                .map((m) => (
-                  <button
-                    key={m.id}
-                    className={`meeting-item${selectedId === m.id && view === "meeting" ? " selected" : ""}`}
-                    onClick={() => choose(m.id)}
-                  >
-                    <div className="meeting-item-top">
-                      <span
-                        className={`meeting-state-icon ${m.status === "recording" ? "recording" : ""}`}
-                      >
-                        {m.status === "recording" ? (
-                          <AudioLines size={16} />
-                        ) : (
-                          m.kind === "dictation" ? <Mic size={15} /> : <FileText size={15} />
-                        )}
-                      </span>
-                      <span className="meeting-item-title">{m.title}</span>
-                      {m.starred && <Star className="filled-star" size={12} />}
-                    </div>
-                    <span className="meeting-item-meta">
-                      {m.isExample
-                        ? "Example conversation"
-                        : m.status === "recording"
-                          ? "Recording now"
-                          : m.status === "paused"
-                            ? "Paused"
-                            : m.status === "processing"
-                              ? "Finishing transcript…"
-                              : `${meetingDate(m.createdAt)} · ${duration(m.duration)}`}
-                    </span>
-                  </button>
-                ))}
-            </section>
-          ))}
+          {renderMeetingGroups(shown.filter((m) => m.kind !== "dictation"))}
+          {shown.some((m) => m.kind === "dictation") && (
+            <details className="sidebar-dictation">
+              <summary>
+                <ChevronRight size={15} className="dictation-chevron" />
+                <Mic size={15} />
+                <span>Dictation</span>
+              </summary>
+              {renderMeetingGroups(shown.filter((m) => m.kind === "dictation"))}
+            </details>
+          )}
           {library.loading && (
             <p className="library-load-state" role="status">
               <LoaderCircle size={14} className="spin" />

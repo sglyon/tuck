@@ -273,6 +273,35 @@ kbd {
   color: #5f6979;
   margin: 14px 10px 7px;
 }
+.sidebar-dictation {
+  margin-top: 14px;
+}
+.sidebar-dictation > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
+}
+.sidebar-dictation > summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-dictation > summary:hover {
+  background: #e9edf5;
+}
+.sidebar-dictation > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.sidebar-dictation[open] > summary .dictation-chevron {
+  transform: rotate(90deg);
+}
 .meeting-item {
   width: 100%;
   text-align: left;
