@@ -4,7 +4,6 @@ import {
   Check,
   ChevronRight,
   LoaderCircle,
-  Pencil,
   RotateCcw,
   X,
 } from "lucide-react";
@@ -77,6 +76,8 @@ export function TranscriptCorrection({
       setBusy(false);
     }
   };
+  useEffect(() => setError(""), [draft?.segmentId]);
+  if (!draft && !segment.edited && !error) return null;
   return (
     <div className="transcript-correction">
       {!draft && (
@@ -87,27 +88,6 @@ export function TranscriptCorrection({
               Corrected by you
             </span>
           )}
-          <button
-            className="text-link"
-            disabled={!inactive}
-            title={
-              !inactive
-                ? "Finish recording before correcting this passage"
-                : undefined
-            }
-            onClick={() => {
-              setError("");
-              onDraft({
-                meetingId: meeting.id,
-                segmentId: segment.id,
-                baseText: segment.text,
-                text: segment.text,
-              });
-            }}
-          >
-            <Pencil size={12} />
-            Correct words
-          </button>
           {segment.edited && (
             <details className="original-transcript">
               <summary>Original transcript</summary>
@@ -143,6 +123,7 @@ export function TranscriptCorrection({
           </p>
           <details className="original-transcript">
             <summary>Original speech recognition</summary>
+            <p className="quiet-note">Audio source: {segment.source === "mixed" ? "Combined audio" : segment.source === "microphone" ? "Microphone" : segment.source === "import" ? "Imported audio" : "Computer audio"}.</p>
             <p>{segment.originalText ?? segment.text}</p>
           </details>
           <div className="proposal-actions">

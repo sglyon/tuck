@@ -34,6 +34,7 @@ import {
   MoreHorizontal,
   Pause,
   Play,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -2548,15 +2549,20 @@ export default function App() {
                               >
                                 {speaker.name}
                               </button>}
-                              <span className="segment-source">
-                                {s.source === "microphone"
-                                  ? "Microphone"
-                                  : s.source === "mixed"
-                                    ? "Combined audio"
-                                    : s.source === "import"
-                                    ? "Imported audio"
-                                    : "Computer audio"}
-                              </span>
+                              {!correctionDrafts[JSON.stringify([meeting.id, s.id])] && <button
+                                className="segment-edit"
+                                aria-label="Correct words"
+                                title={active || meeting.status === "processing" ? "Finish recording before correcting this passage" : `Correct words at ${clock(s.start)}`}
+                                disabled={!!active || meeting.status === "processing"}
+                                onClick={() => changeCorrection(meeting.id, s.id, {
+                                  meetingId: meeting.id,
+                                  segmentId: s.id,
+                                  baseText: s.text,
+                                  text: s.text,
+                                })}
+                              >
+                                <Pencil size={13} />
+                              </button>}
                               <button
                                 className="segment-time"
                                 onClick={() => {

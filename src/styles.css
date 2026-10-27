@@ -1201,6 +1201,22 @@ kbd {
   font-size: 10px;
   color: #616872;
 }
+.segment-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  color: #667185;
+}
+.segment-edit:hover:not(:disabled),
+.segment-edit:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.segment-edit:disabled { opacity: 0.45; }
 .segment-time {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
