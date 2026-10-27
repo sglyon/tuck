@@ -46,7 +46,7 @@ export function meetingHeader(m: Meeting): MeetingHeader {
     calendarEvent,
     recoveredFrom,
     segmentCount: m.segments.length,
-    speakerCount: m.speakers.length,
+    speakerCount: m.speakers.filter((speaker) => speaker.id !== "unassigned").length,
     messageCount: m.messages.length,
     bookmarkCount: m.bookmarks.length,
     taskCount: (m.tasks || []).length,

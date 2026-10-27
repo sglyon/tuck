@@ -25,6 +25,8 @@ export const defaults: Settings = {
   notionPropertyMapping: {},
   threads: 2,
   keepAudio: true,
+  autoRefine: true,
+  rememberVoices: true,
   hasOpenAIKey: false,
   hasNotionToken: false,
   customTemplates: [],

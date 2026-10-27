@@ -28,6 +28,7 @@ pub struct Adapters {
 struct State {
     active: Option<String>,
     retain_audio: bool,
+    live_projection: Option<(String, Vec<Value>, HashSet<String>, Vec<Value>)>,
     operations: HashSet<(String, String)>,
     warnings: Vec<String>,
     coach: coach::CoachSession,
@@ -118,10 +119,43 @@ impl MeetingService {
         Ok(dto)
     }
     pub fn meeting(&self, id: &str) -> Result<Value> {
+        let mut dto=self.transaction(|r| {let m=r.get(id)?;Self::view(r,m)})?;
+        let projection=lock(&self.state)?.live_projection.clone();
+        if let Some((owner,mut segments,raw_ids,speakers))=projection {
+            if owner==id {
+                segments.extend(dto["segments"].as_array().into_iter().flatten().filter(|s|!raw_ids.contains(s["id"].as_str().unwrap_or(""))).cloned());
+                segments.sort_by(|a,b|a["start"].as_f64().unwrap_or(0.).total_cmp(&b["start"].as_f64().unwrap_or(0.)));
+                dto["segments"]=json!(segments);dto["speakers"]=json!(speakers);
+            }
+        }
+        if let Ok(profiles)=self.adapters.capture.voice_profiles() {
+            if let Some(speakers)=dto["speakers"].as_array_mut() {
+                for speaker in speakers {if let Some(profile)=profiles.iter().find(|p|p["id"]==speaker["id"]) {speaker["name"]=profile["name"].clone();speaker["color"]=profile["color"].clone();}}
+            }
+        }
+        Ok(dto)
+    }
+    fn live_speakers(&self,id:&str,v:&Value)->Result<()> {
+        let items=v["segments"].as_array().ok_or_else(||AppError::invalid("Invalid speaker projection."))?;
+        if items.len()>50_000{return Err(AppError::invalid("Speaker projection is too large."));}
+        for item in items {let segment=TranscriptSegment::from_dto(item.clone())?;if segment.meeting_id!=id{return Err(AppError::invalid("Speaker projection belongs to another meeting."));}}
+        let raw_ids:HashSet<String>=v["rawSegmentIds"].as_array().ok_or_else(||AppError::invalid("Invalid speaker evidence."))?.iter().map(|s|s.as_str().map(str::to_owned).ok_or_else(||AppError::invalid("Invalid speaker evidence."))).collect::<Result<_>>()?;
+        let speakers=v["speakers"].as_array().cloned().unwrap_or_default();
+        for speaker in &speakers {
+            domain::text(&speaker["id"],"Speaker ID",128,false)?;
+            domain::text(&speaker["name"],"Speaker name",120,false)?;
+            if !speaker["color"].as_u64().is_some_and(|n|n<6) {return Err(AppError::invalid("Invalid speaker color."));}
+        }
         self.transaction(|r| {
-            let m = r.get(id)?;
-            Self::view(r, m)
-        })
+            let m=r.get(id)?;if !m.active(){return Err(AppError::invalid("Speaker identification finished after recording."));}
+            let stored:HashSet<String>=r.raw_segments(id)?.iter().filter_map(|s|s["id"].as_str().map(str::to_owned)).collect();
+            if !raw_ids.is_subset(&stored){return Err(AppError::invalid("Speaker projection has no original evidence."));}
+            let existing=r.speakers(id)?;
+            for speaker in &speakers {if !existing.iter().any(|old|old["id"]==speaker["id"]) {r.save_speaker(id,speaker)?;}}
+            Ok(Value::Null)
+        })?;
+        {let mut state=lock(&self.state)?;if state.active.as_deref()!=Some(id){return Ok(());}state.live_projection=Some((id.into(),items.clone(),raw_ids,speakers));}
+        self.changed(id)?;Ok(())
     }
     fn seed_dictation_notes(repo: &mut dyn Repository, meeting: &mut Meeting) -> Result<()> {
         if meeting.is_dictation() && meeting.notes.is_empty() {
@@ -249,10 +283,18 @@ impl MeetingService {
         })
     }
     pub fn segment(&self, id: &str, v: Value) -> Result<()> {
+        if v["kind"]=="speaker_projection" {return self.live_speakers(id,&v);}
+        let name=v.get("speakerName").and_then(Value::as_str).map(str::to_owned);
+        let color=v.get("speakerColor").and_then(Value::as_u64).filter(|c|*c<6);
+        if let Some(name)=&name {domain::text(&json!(name),"Speaker name",120,false)?;}
         let segment = TranscriptSegment::from_dto(v)?;
         let added = self.transaction(|r| {
             r.get(id)?.accept(&segment)?;
-            Ok(json!(r.append(&segment)?))
+            let added=r.append(&segment)?;
+            if let Some(name)=&name {
+                if let Some(color)=color {r.save_speaker(id,&json!({"id":segment.speaker_id,"name":name,"color":color}))?;} else {r.rename_speaker(id,&segment.speaker_id,name)?;}
+            }
+            Ok(json!(added))
         })?;
         if added == true {
             (self.emit)("segment", json!({"meetingId":id,"segment":segment.dto()}));
@@ -290,6 +332,7 @@ impl MeetingService {
             let mut state = lock(&self.state)?;
             state.active = Some(id.into());
             state.retain_audio = settings["keepAudio"] == true;
+            state.live_projection=None;
         }
         let result = self.adapters.capture.start(
             id,
@@ -392,7 +435,7 @@ impl MeetingService {
             }
         }
     }
-    pub fn stop_recording(&self, id: &str) -> Result<Value> {
+    pub fn stop_recording(self:&Arc<Self>, id: &str) -> Result<Value> {
         self.coach_capture_changed(id, true)?;
         let keep;
         {
@@ -419,6 +462,21 @@ impl MeetingService {
         self.retention(id, keep);
         (self.emit)("recording_state", json!({"meetingId":id,"state":"idle"}));
         self.changed(id)?;
+        let original=self.meeting(id)?;
+        let settings=self.get_settings()?;
+        if keep && original["kind"]!="dictation" && settings["autoRefine"]!=false && self.adapters.capture.status()["offlineSpeakerModelInstalled"]==true {
+            (self.emit)("meeting_refinement",json!({"meetingId":id,"state":"processing"}));
+            match self.recover_audio(&json!({"meetingId":id}),true) {
+                Ok(refined)=>{
+                    {lock(&self.state)?.live_projection=None;}
+                    let refined_id=string(&refined,"id")?;
+                    self.after_meeting(refined_id);
+                    (self.emit)("meeting_refinement",json!({"meetingId":id,"state":"complete","refinedMeetingId":refined_id}));
+                    return self.meeting(refined_id);
+                }
+                Err(_)=>{(self.emit)("meeting_refinement",json!({"meetingId":id,"state":"failed"}));(self.emit)("engine_error",json!({"code":"automatic_refinement_failed","meetingId":id,"message":"Your recording and transcript are saved. Speaker refinement did not finish; retry Refine transcript from Saved audio."}));}
+            }
+        }
         self.after_meeting(id);
         self.meeting(id)
     }
@@ -813,9 +871,16 @@ impl MeetingService {
                 self.transaction(|r| {
                     r.get(id)?;
                     r.rename_speaker(id, speaker, name)?;
+                    if speaker.starts_with("voice-") {r.rename_remembered_speaker(speaker,name)?;}
                     Ok(Value::Null)
                 })?;
+                if speaker.starts_with("voice-") {self.adapters.capture.rename_voice(speaker,name)?;}
                 self.changed(id)
+            }
+            "voice_profiles" => Ok(json!(self.adapters.capture.voice_profiles()?)),
+            "forget_voices" => {
+                let _life=lock(&self.lifecycle)?;self.assert_idle()?;
+                self.adapters.capture.forget_voices()?;Ok(Value::Null)
             }
             "add_bookmark" => {
                 let id = string(p, "meetingId")?;
@@ -901,6 +966,7 @@ impl MeetingService {
                     r.save_settings(&next)?;
                     Ok(Value::Null)
                 })?;
+                if let Some(enabled)=p["changes"].get("rememberVoices").and_then(Value::as_bool) {self.adapters.capture.set_voice_memory_enabled(enabled)?;}
                 self.get_settings()
             }
             "save_secret" => {

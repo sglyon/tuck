@@ -121,3 +121,42 @@ segments assembled from both tracks retain `mixed` source provenance. Partial
 echoes are aligned as local phrase runs, so ASR substitutions do not leave
 interleaved duplicate words when an utterance misses the whole-phrase threshold.
 A distinct voice inside an echoed span and unmatched phrase endings remain.
+
+## Immediate text, delayed identity
+
+Live meetings no longer load the legacy CAMPPlus extractor or greedily assign
+speaker IDs to VAD chunks. ASR publishes text with `unassigned` speaker identity.
+A separate cancellable worker analyzes at most five minutes of saved PCM context
+and considers words only after 90 seconds of additional recorded context. Its
+immutable UI projection preserves newer raw STT and never rewrites raw evidence.
+Previously accepted labels survive when their audio leaves the rolling window.
+Unknown or ambiguous voices remain unidentified.
+
+Identity selection uses the aggregated context embedding, cosine similarity at
+least 0.85, a 0.15 gap over the next stored profile, and at least 15 seconds of
+context speech. Individual segmentation embeddings only verify that selected
+identity (0.70 support threshold, 0.15 runner-up gap). Two independent windows
+and 90% agreement are required. Live passes do not enroll voices. These are
+conservative gates calibrated on two local recordings, not authentication or a
+guarantee of a person's identity.
+
+`voice-memory.json` in the local application data directory stores model-revision
+bound, anonymous voice templates and user-confirmed names, written atomically
+with mode 0600. No embeddings are sent to an AI provider or exposed in meeting
+DTOs. Renaming a remembered voice updates its saved name across local meetings.
+Settings can stop voice matching immediately or forget the templates without
+removing transcript text or saved names. Templates are local to this Mac and
+are not included in library backups.
+
+After Stop, automatic refinement creates a derived meeting and keeps the
+original. New voices are enrolled only from sufficient full-meeting evidence.
+The final pass reuses the just-recorded word timings when available; a saved-file
+replay after restart retranscribes locally. Dictation, opted-out meetings, and
+meetings without retained audio skip this automation. Identification failures
+cannot stop STT; final-pass failures preserve the original and allow retry.
+
+The diagnostics evaluator accepts an explicit `--remember-voices` flag to test
+persistent templates in its supplied data directory. Without that flag it never
+writes voice memory. The ignored native test `evaluate_delayed_saved_recordings`
+replays context checkpoints using only profiles learned from a separate earlier
+recording; its `TUCK_DELAYED_*` paths must point to private evaluation directories.

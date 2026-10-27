@@ -756,6 +756,7 @@ struct Session {
     acquisition: Option<JoinHandle<()>>,
     inference: Option<JoinHandle<()>>,
     done: Receiver<Result<()>>,
+    speakers: Option<super::live_speakers::Worker>,
 }
 #[derive(Clone, Default)]
 struct DeviceSelection {
@@ -799,6 +800,9 @@ impl<T> WarmSpeech<T> {
 pub struct CaptureEngine {
     devices: Mutex<DeviceSelection>,
     diarization: Mutex<bool>,
+    voices: Arc<super::voice_memory::VoiceMemory>,
+    remember_voices: AtomicBool,
+    last_transcript: Mutex<Option<(String, Arc<Mutex<Vec<Value>>>)>>,
     data_dir: PathBuf,
     _resources_dir: PathBuf,
     models: Arc<ModelManager>,
@@ -811,9 +815,12 @@ impl CaptureEngine {
     pub fn new(data_dir: PathBuf, resources_dir: PathBuf, emit: Emit) -> Self {
         let models = ModelManager::new(&data_dir, emit.clone());
         Self {
-            data_dir,
+            data_dir: data_dir.clone(),
             devices: Mutex::new(DeviceSelection::default()),
             diarization: Mutex::new(true),
+            voices: Arc::new(super::voice_memory::VoiceMemory::new(&data_dir)),
+            remember_voices: AtomicBool::new(true),
+            last_transcript: Mutex::new(None),
             _resources_dir: resources_dir,
             models,
             context: Context {
@@ -874,6 +881,9 @@ impl CaptureEngine {
         let session = session_guard.as_mut().ok_or_else(|| {
             error("The recording worker is unavailable. Saved audio has been preserved.")
         })?;
+        if let Some(worker) = &session.speakers {
+            worker.cancel();
+        }
         let (tx, rx) = mpsc::channel();
         let stopped = if session.control.send(Control::Stop(tx)).is_ok() {
             match rx.recv_timeout(Duration::from_secs(130)){Ok(result)=>result,Err(mpsc::RecvTimeoutError::Disconnected)=>Err(error("The capture worker stopped unexpectedly. Saved audio has been preserved.")),Err(mpsc::RecvTimeoutError::Timeout)=>return Err(error("Audio capture did not stop in time. Saved audio has been preserved; restart Tuck to recover it."))}
@@ -894,6 +904,9 @@ impl CaptureEngine {
         if let Some(thread) = session.inference.take() {
             let _ = thread.join();
         }
+        if let Some(mut worker) = session.speakers.take() {
+            worker.stop();
+        }
         *session_guard = None;
         let failure = {
             let mut state = lock(&self.context.state);
@@ -913,6 +926,8 @@ impl CaptureEngine {
 impl RecordingPort for CaptureEngine {
     fn configure(&self, settings: &Value) -> Result<()> {
         *lock(&self.diarization) = settings["diarization"].as_bool().unwrap_or(true);
+        self.remember_voices
+            .store(settings["rememberVoices"] != false, Ordering::Release);
         *lock(&self.devices) = DeviceSelection {
             microphone: settings["microphoneDeviceId"]
                 .as_str()
@@ -974,6 +989,15 @@ impl RecordingPort for CaptureEngine {
         let (work_tx, work_rx) = mpsc::sync_channel(QUEUE_CAPACITY);
         let (ready_tx, ready_rx) = mpsc::channel();
         let (done_tx, done) = mpsc::channel();
+        let cache = Arc::new(Mutex::new(Vec::new()));
+        let speaker_callback = on_segment.clone();
+        let live_callback = on_segment.clone();
+        let saved = cache.clone();
+        let on_segment: OnSegment = Arc::new(move |segment| {
+            speaker_callback(segment.clone())?;
+            lock(&saved).push(segment);
+            Ok(())
+        });
         let models = self.models.clone();
         let diarization = *lock(&self.diarization);
         let context = self.context.clone();
@@ -998,7 +1022,6 @@ impl RecordingPort for CaptureEngine {
                 let _ = ready_tx.send(Ok(()));
                 let result = inference_loop(&work_rx, &mut pipeline);
                 if result.is_ok() && !diarization {
-                    pipeline.runtime.reset_session();
                     lock(&warm_speech).put(generation, key, pipeline.runtime);
                 }
                 result
@@ -1049,11 +1072,24 @@ impl RecordingPort for CaptureEngine {
             .and_then(|x| x)
         {
             Ok(()) => {
+                *lock(&self.last_transcript) = Some((meeting.into(), cache.clone()));
                 *lock(&self.session) = Some(Session {
                     control,
                     acquisition: Some(acquisition),
                     inference: Some(inference),
                     done,
+                    speakers: if diarization && self.remember_voices.load(Ordering::Acquire) {
+                        super::live_speakers::start(
+                            self.models.clone(),
+                            self.voices.clone(),
+                            meeting_audio_dir(&self.data_dir, meeting)?,
+                            meeting.into(),
+                            cache.clone(),
+                            live_callback,
+                        )
+                    } else {
+                        None
+                    },
                 });
                 Ok(())
             }
@@ -1114,6 +1150,7 @@ impl RecordingPort for CaptureEngine {
         }
     }
     fn unload(&self) -> Result<()> {
+        *lock(&self.last_transcript) = None;
         let _operation = lock(&self.operation);
         if lock(&self.session).is_some() {
             return Err(error("Stop recording before unloading speech models."));
@@ -1122,12 +1159,33 @@ impl RecordingPort for CaptureEngine {
         Ok(())
     }
     fn install_model(&self, kind: &str) -> Result<Value> {
+        *lock(&self.last_transcript) = None;
         let _operation = lock(&self.operation);
         if lock(&self.session).is_some() {
             return Err(error("Stop recording before installing a model."));
         }
         self.clear_dictation_warmth();
         self.models.install(kind)
+    }
+    fn set_voice_memory_enabled(&self, enabled: bool) -> Result<()> {
+        self.remember_voices.store(enabled, Ordering::Release);
+        if !enabled {
+            if let Some(session) = lock(&self.session).as_ref() {
+                if let Some(worker) = &session.speakers {
+                    worker.cancel();
+                }
+            }
+        }
+        Ok(())
+    }
+    fn voice_profiles(&self) -> Result<Vec<Value>> {
+        self.voices.names()
+    }
+    fn rename_voice(&self, id: &str, name: &str) -> Result<()> {
+        self.voices.rename(id, name)
+    }
+    fn forget_voices(&self) -> Result<()> {
+        self.voices.forget()
     }
     fn refine_files(
         &self,
@@ -1153,8 +1211,41 @@ impl RecordingPort for CaptureEngine {
             super::audio::copy_normalized(Path::new(path), &destination)?;
             copies.push((source.clone(), destination));
         }
-        let (duration, segments) =
-            super::refinement::refine(&self.models, &copies, meeting, threads)?;
+        let memory = if self.remember_voices.load(Ordering::Acquire) {
+            Some(self.voices.as_ref())
+        } else {
+            None
+        };
+        let original = paths
+            .first()
+            .and_then(|(_, p)| Path::new(p).parent()?.file_name()?.to_str());
+        let cached = lock(&self.last_transcript)
+            .as_ref()
+            .filter(|(id, _)| Some(id.as_str()) == original)
+            .map(|(_, raw)| lock(raw).clone())
+            .filter(|raw| !raw.is_empty() && raw.iter().all(|s| s["words"].is_array()));
+        let (duration, segments) = if let Some(raw) = cached {
+            let mut duration: f64 = 0.;
+            for (_, path) in &copies {
+                let mut file = super::audio::open_regular(path)?;
+                duration = duration.max(super::audio::inspect(&mut file)?.duration());
+            }
+            if duration > 7200. {
+                return Err(error(
+                    "Speaker refinement currently supports recordings up to two hours.",
+                ));
+            }
+            super::refinement::refine_transcript(
+                &self.models,
+                &copies,
+                meeting,
+                memory,
+                duration,
+                &raw,
+            )?
+        } else {
+            super::refinement::refine_with_memory(&self.models, &copies, meeting, threads, memory)?
+        };
         for segment in segments {
             on_segment(segment)?;
         }
@@ -1448,6 +1539,7 @@ mod tests {
             acquisition: Some(acquisition),
             inference: Some(inference),
             done,
+            speakers: None,
         });
         assert!(engine.stop().is_err());
         assert!(lock(&engine.session).is_none());
@@ -1542,6 +1634,71 @@ mod tests {
             );
             source.stop();
         }
+    }
+    #[test]
+    #[ignore = "explicit saved-audio cache validation with installed offline speaker models"]
+    fn cached_final_refinement_does_not_need_asr_models() {
+        let case = PathBuf::from(std::env::var_os("TUCK_DELAYED_CASE").expect("TUCK_DELAYED_CASE"));
+        let data =
+            PathBuf::from(std::env::var_os("TUCK_DELAYED_MODELS").expect("TUCK_DELAYED_MODELS"));
+        let cached = PathBuf::from(std::env::var_os("TUCK_DELAYED_RAW").expect("TUCK_DELAYED_RAW"));
+        let saved: Value = serde_json::from_slice(&fs::read(cached).unwrap()).unwrap();
+        let root = tempfile::tempdir_in(&case).unwrap();
+        fs::create_dir(root.path().join("models")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(
+            data.join("models/diarization-coreml"),
+            root.path().join("models/diarization-coreml"),
+        )
+        .unwrap();
+        let engine =
+            CaptureEngine::new(root.path().to_owned(), PathBuf::new(), Arc::new(|_, _| {}));
+        assert!(
+            !engine.models.installed("parakeet"),
+            "ASR models are intentionally absent from this test"
+        );
+        *lock(&engine.last_transcript) = Some((
+            case.file_name().unwrap().to_str().unwrap().into(),
+            Arc::new(Mutex::new(saved["rawSegments"].as_array().unwrap().clone())),
+        ));
+        let paths = ["system", "microphone"]
+            .into_iter()
+            .map(|s| {
+                (
+                    s.into(),
+                    case.join(format!("{s}.wav")).to_string_lossy().into_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let results = Arc::new(Mutex::new(vec![]));
+        let sink = results.clone();
+        let started = Instant::now();
+        let duration = engine
+            .refine_files(
+                &paths,
+                &uuid::Uuid::new_v4().to_string(),
+                Arc::new(move |s| {
+                    lock(&sink).push(s);
+                    Ok(())
+                }),
+                2,
+            )
+            .unwrap();
+        assert!((duration - saved["duration"].as_f64().unwrap()).abs() < 0.01);
+        let speakers: HashSet<_> = lock(&results)
+            .iter()
+            .filter_map(|s| {
+                s["speakerId"]
+                    .as_str()
+                    .filter(|id| *id != "unassigned")
+                    .map(str::to_owned)
+            })
+            .collect();
+        assert_eq!(speakers.len(), 4);
+        println!(
+            "Cached final speaker pass {:.2}s; no ASR models loaded",
+            started.elapsed().as_secs_f64()
+        );
     }
     /// Explicit integration check. Reuses only pinned public fixture/installed models.
     #[test]

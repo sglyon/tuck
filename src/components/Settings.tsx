@@ -643,44 +643,11 @@ export default function Settings({
               </div>
               <div>
                 <h3>
-                  Speaker separation <span className="small-tag">OPTIONAL</span>
-                </h3>
-                <p>Group remote voices into provisional speakers.</p>
-                <small>
-                  You assign names. Overlapping voices may need correction.
-                </small>
-              </div>
-              <button
-                className="button secondary compact"
-                disabled={!!busy || status.speakerModelInstalled}
-                onClick={() => void install("speakers")}
-              >
-                {status.speakerModelInstalled ? (
-                  <>
-                    <Check size={15} />
-                    Installed
-                  </>
-                ) : pending("speakers") ? (
-                  <LoaderCircle size={15} className="spin" />
-                ) : (
-                  <>
-                    <Download size={15} />
-                    Set up
-                  </>
-                )}
-              </button>
-            </div>
-            <div className="model-row">
-              <div className="model-glyph muted-glyph">
-                <Mic size={22} />
-              </div>
-              <div>
-                <h3>
-                  Meeting refinement <span className="small-tag">OPTIONAL</span>
+                  Delayed speaker identification <span className="small-tag">OPTIONAL</span>
                 </h3>
                 <p>
-                  Rebuild saved transcripts with more consistent speakers and
-                  less duplicated audio.
+                  Text arrives first. Confident matches to stored voices appear
+                  about 90 seconds later. Uncertain voices stay unidentified.
                 </p>
                 <small>
                   Apple silicon · 22 MB download. Runs entirely on this Mac.
@@ -841,6 +808,15 @@ export default function Settings({
                 onChange={(v) => change({ keepAudio: v })}
               />
             </SettingRow>
+            <SettingRow title="Refine meetings automatically" description="After Stop, improve speakers and remove duplicated audio in a separate transcript. Requires saved audio and the speaker model.">
+              <Toggle label="Refine meetings automatically" checked={s.autoRefine} disabled={!!busy} onChange={(v)=>change({autoRefine:v})} />
+            </SettingRow>
+            <SettingRow title="Remember voices on this Mac" description="Use and save local voice profiles for consistent names across meetings. Uncertain matches stay unidentified. Turn this off to stop matching; use Forget to remove saved profiles.">
+              <Toggle label="Remember voices on this Mac" checked={s.rememberVoices} disabled={!!busy} onChange={(v)=>change({rememberVoices:v})} />
+            </SettingRow>
+            <button className="button subtle compact" disabled={!!busy} onClick={()=>{
+              if (window.confirm("Forget all stored voice profiles? Existing transcripts and speaker names will be kept.")) void run("forget-voices",async()=>{await call("forget_voices");notify("Stored voice profiles forgotten. Existing transcripts are unchanged.");});
+            }}>Forget stored voices</button>
             <div className="privacy-table">
               <div>
                 <AudioLines size={17} />

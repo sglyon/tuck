@@ -108,8 +108,8 @@ struct TuckSpeech {
     static func main() async {
         do {
             let arguments = Array(CommandLine.arguments.dropFirst())
-            if arguments.count == 4 && arguments[0] == "--diarize" {
-                try await diarize(models: arguments[1], audio: arguments[2], source: arguments[3])
+            if arguments.count == 4 && ["--diarize", "--identify"].contains(arguments[0]) {
+                try await diarize(models: arguments[1], audio: arguments[2], source: arguments[3], includeChunks: arguments[0] == "--identify")
                 return
             }
             guard arguments.count == 2 || arguments.count == 3,

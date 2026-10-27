@@ -2,8 +2,8 @@
 use super::models::{self, BackendModels, ModelManager};
 use serde_json::{json, Value};
 use sherpa_onnx::{
-    LinearResampler, OfflineRecognizer, OfflineRecognizerConfig, SpeakerEmbeddingExtractor,
-    SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector,
+    LinearResampler, OfflineRecognizer, OfflineRecognizerConfig, VadModelConfig,
+    VoiceActivityDetector,
 };
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -213,25 +213,7 @@ enum Recognizer {
 }
 pub struct SpeechRuntime {
     recognizer: Recognizer,
-    extractor: Option<SpeakerEmbeddingExtractor>,
-    clusters: SpeakerClusters,
-}
-fn load_speaker_extractor(
-    models: &ModelManager,
-    enabled: bool,
-) -> Result<Option<SpeakerEmbeddingExtractor>> {
-    if !enabled || !models.installed("speakers") {
-        return Ok(None);
-    }
-    models.verify_speaker()?;
-    let config = SpeakerEmbeddingExtractorConfig {
-        model: Some(models.speaker_path().to_string_lossy().into_owned()),
-        ..Default::default()
-    };
-    Ok(Some(
-        SpeakerEmbeddingExtractor::create(&config)
-            .ok_or_else(|| error("The speaker model could not load. Reinstall it in Settings."))?,
-    ))
+    identify_speakers: bool,
 }
 impl SpeechRuntime {
     pub fn is_alive(&mut self) -> bool {
@@ -241,9 +223,6 @@ impl SpeechRuntime {
             }
             Recognizer::Cpu(_) => true,
         }
-    }
-    pub fn reset_session(&mut self) {
-        self.clusters = SpeakerClusters::default();
     }
     pub fn load(models: &ModelManager, threads: u32, diarization: bool) -> Result<Self> {
         let recognizer = match models.verify()? {
@@ -273,13 +252,12 @@ impl SpeechRuntime {
                 })?)
             }
         };
-        let extractor = load_speaker_extractor(models, diarization)?;
         Ok(Self {
             recognizer,
-            extractor,
-            clusters: SpeakerClusters::default(),
+            identify_speakers: diarization,
         })
     }
+
     pub fn transcribe(
         &mut self,
         samples: &[f32],
@@ -303,77 +281,19 @@ impl SpeechRuntime {
         if text.is_empty() {
             return Ok(None);
         }
-        let mut speaker = if source == "microphone" {
-            "you".into()
-        } else {
-            "speaker-1".into()
-        };
-        if source != "microphone" && samples.len() >= SAMPLE_RATE as usize {
-            if let Some(extractor) = &self.extractor {
-                let stream = extractor
-                    .create_stream()
-                    .ok_or_else(|| error("The speaker extractor could not create a stream."))?;
-                stream.accept_waveform(SAMPLE_RATE as i32, samples);
-                stream.input_finished();
-                if extractor.is_ready(&stream) {
-                    let embedding = extractor
-                        .compute(&stream)
-                        .ok_or_else(|| error("The speaker extractor returned no embedding."))?;
-                    speaker = self.clusters.identify(embedding);
-                }
-            }
-        }
+        // Recognition never guesses a meeting speaker. A separate delayed pass
+        // can supply a verified voice identity once sufficient context exists.
+        let speaker = initial_speaker(self.identify_speakers, source);
         Ok(Some(
             json!({"id":uuid::Uuid::new_v4().to_string(),"meetingId":meeting,"start":(start.max(0.0)*1000.0).round()/1000.0,"end":((start.max(0.0)+samples.len()as f64/SAMPLE_RATE as f64)*1000.0).round()/1000.0,"text":text,"speakerId":speaker,"source":source,"words":recognized["words"]}),
         ))
     }
 }
-#[derive(Default)]
-struct SpeakerClusters {
-    centers: Vec<Vec<f32>>,
-    counts: Vec<usize>,
-}
-fn normalize(values: &mut [f32]) -> bool {
-    let norm = values.iter().map(|v| v * v).sum::<f32>().sqrt();
-    if !norm.is_finite() || norm <= 1e-8 {
-        return false;
-    }
-    for value in values {
-        *value /= norm;
-    }
-    true
-}
-impl SpeakerClusters {
-    fn identify(&mut self, mut values: Vec<f32>) -> String {
-        if !normalize(&mut values) {
-            return "speaker-1".into();
-        }
-        let best = self
-            .centers
-            .iter()
-            .enumerate()
-            .filter(|(_, center)| center.len() == values.len())
-            .map(|(i, center)| {
-                (
-                    i,
-                    center.iter().zip(&values).map(|(a, b)| a * b).sum::<f32>(),
-                )
-            })
-            .max_by(|a, b| a.1.total_cmp(&b.1));
-        if let Some((index, score)) = best {
-            if score >= 0.65 || self.centers.len() >= 12 {
-                let count = self.counts[index].min(20) as f32;
-                for (center, value) in self.centers[index].iter_mut().zip(values) {
-                    *center = *center * count + value;
-                }
-                normalize(&mut self.centers[index]);
-                self.counts[index] += 1;
-                return format!("speaker-{}", index + 1);
-            }
-        }
-        self.centers.push(values);
-        self.counts.push(1);
-        format!("speaker-{}", self.centers.len())
+fn initial_speaker(meeting: bool, source: &str) -> &'static str {
+    if !meeting && source == "microphone" {
+        "you"
+    } else {
+        "unassigned"
     }
 }
 pub struct SpeechChunk {
@@ -543,21 +463,6 @@ mod tests {
             offset += c.samples.len();
         }
     }
-    #[test]
-    fn disabled_speaker_recognition_does_not_verify_or_load_an_installed_model() {
-        let root = tempfile::tempdir().unwrap();
-        let models = ModelManager::new(root.path(), std::sync::Arc::new(|_, _| {}));
-        let path = models.speaker_path();
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        // An installed-size corrupt model would normally fail integrity checks.
-        std::fs::File::create(path)
-            .unwrap()
-            .set_len(29_596_978)
-            .unwrap();
-        assert!(models.installed("speakers"));
-        assert!(load_speaker_extractor(&models, false).unwrap().is_none());
-        assert!(load_speaker_extractor(&models, true).is_err());
-    }
     #[cfg(unix)]
     #[test]
     fn model_aliases_use_the_same_physical_directory() {
@@ -578,18 +483,10 @@ mod tests {
         assert!(model_directory(&root.path().join("missing")).is_err());
     }
     #[test]
-    fn provisional_speakers_are_bounded() {
-        let mut clusters = SpeakerClusters::default();
-        assert_eq!(clusters.identify(vec![1.0, 0.0]), "speaker-1");
-        assert_eq!(clusters.identify(vec![0.99, 0.01]), "speaker-1");
-        assert_eq!(clusters.identify(vec![-1.0, 0.0]), "speaker-2");
-        assert_eq!(clusters.identify(vec![f32::NAN]), "speaker-1");
-        for i in 0..30 {
-            let mut v = vec![0.0; 30];
-            v[i] = 1.0;
-            clusters.identify(v);
-        }
-        assert!(clusters.centers.len() <= 12);
+    fn immediate_meeting_transcription_does_not_guess_a_voice() {
+        assert_eq!(initial_speaker(true, "microphone"), "unassigned");
+        assert_eq!(initial_speaker(true, "system"), "unassigned");
+        assert_eq!(initial_speaker(false, "microphone"), "you");
     }
     #[test]
     fn resampler_is_streaming_and_bounded() {

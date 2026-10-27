@@ -106,6 +106,7 @@ struct Capture {
     fail_stop: Mutex<bool>,
     refined_paths: Mutex<Vec<(String,String)>>,
     fail_refine: Mutex<bool>,
+    delayed_available: Mutex<bool>,
     flush_on_pause: Mutex<bool>,
     shutdown_calls: Mutex<usize>,
 }
@@ -119,7 +120,7 @@ impl RecordingPort for Capture {
         }
     }
     fn status(&self) -> Value {
-        json!({"captureAvailable":true,"modelInstalled":true})
+        json!({"captureAvailable":true,"modelInstalled":true,"offlineSpeakerModelInstalled":*self.delayed_available.lock().unwrap()})
     }
     fn start(
         &self,
@@ -2454,5 +2455,57 @@ fn refinement_uses_both_tracks_and_preserves_original_on_success_and_failure() {
             assert!(r.ai.calls.lock().unwrap().is_empty());
             assert!(r.archive.removed.lock().unwrap().is_empty());
         }
+    }
+}
+
+#[test]
+fn stopping_a_meeting_refines_automatically_and_keeps_original_evidence() {
+    for fail in [false,true] {for store in stores(){
+        let r=rig(store.clone());*r.capture.delayed_available.lock().unwrap()=true;*r.capture.fail_refine.lock().unwrap()=fail;
+        let original=call(&r.service,"create_meeting",json!({"title":"Recorded meeting"}));let id=original["id"].as_str().unwrap();
+        call(&r.service,"start_recording",json!({"meetingId":id}));
+        let result=call(&r.service,"stop_recording",json!({"meetingId":id}));
+        assert_eq!(r.service.meeting(id).unwrap()["status"],"complete");
+        assert_eq!(tx(&*store,|repo|Ok(json!(repo.raw_segments(id)?))).unwrap().as_array().unwrap().len(),1);
+        assert!(!r.capture.refined_paths.lock().unwrap().is_empty());
+        if fail {assert_eq!(result["id"],id);} else {assert_ne!(result["id"],id);assert_eq!(result["recoveredFrom"],id);}
+        assert!(r.ai.calls.lock().unwrap().is_empty());
+    }}
+}
+#[test]
+fn automatic_speaker_refinement_skips_dictation_opt_out_and_unretained_audio() {
+    for (dictation,enabled,keep) in [(true,true,true),(false,false,true),(false,true,false)] {
+        let r=rig(Arc::new(MemoryStore::default()));*r.capture.delayed_available.lock().unwrap()=true;
+        call(&r.service,"update_settings",json!({"changes":{"autoRefine":enabled,"keepAudio":keep}}));
+        let m=call(&r.service,if dictation{"create_dictation"}else{"create_meeting"},json!({}));let id=m["id"].as_str().unwrap();
+        call(&r.service,"start_recording",json!({"meetingId":id}));let result=call(&r.service,"stop_recording",json!({"meetingId":id}));
+        assert_eq!(result["id"],id);assert!(r.capture.refined_paths.lock().unwrap().is_empty());
+    }
+}
+#[test]
+fn delayed_projection_relabels_without_overwriting_evidence_or_losing_new_stt() {
+    for store in stores(){
+        let r=rig(store.clone());let m=call(&r.service,"create_meeting",json!({}));let id=m["id"].as_str().unwrap();
+        call(&r.service,"start_recording",json!({"meetingId":id}));
+        let mut raw=segment(id,"first");raw["speakerId"]=json!("unassigned");r.service.segment(id,raw.clone()).unwrap();
+        let mut identified=raw.clone();identified["id"]=json!("identified");identified["speakerId"]=json!("voice-known");
+        let projection=json!({"kind":"speaker_projection","segments":[identified],"rawSegmentIds":["first"],"speakers":[{"id":"voice-known","name":"Known voice","color":0}]});
+        r.service.segment(id,projection.clone()).unwrap();let mut tail=segment(id,"latest");tail["start"]=json!(8.);tail["end"]=json!(10.);tail["speakerId"]=json!("unassigned");r.service.segment(id,tail).unwrap();
+        let view=r.service.meeting(id).unwrap();assert_eq!(view["segments"].as_array().unwrap().len(),2);assert_eq!(view["segments"][0]["speakerId"],"voice-known");assert_eq!(view["segments"][1]["id"],"latest");
+        let evidence=tx(&*store,|repo|Ok(json!(repo.raw_segments(id)?))).unwrap();assert_eq!(evidence[0],raw);
+        let mut invalid=projection;invalid["rawSegmentIds"]=json!(["missing"]);assert!(r.service.segment(id,invalid).is_err());
+    }
+}
+
+#[test]
+fn remembered_voice_names_are_durable_across_meetings() {
+    for store in stores(){
+        let mut one=Meeting::create("One").unwrap();let mut two=Meeting::create("Two").unwrap();
+        tx(&*store,|repo| {
+            repo.save(&mut one)?;repo.save(&mut two)?;
+            for id in [&one.id,&two.id] {repo.save_speaker(id,&json!({"id":"voice-shared","name":"Voice 1","color":0}))?;}
+            repo.rename_remembered_speaker("voice-shared","Confirmed name")?;Ok(Value::Null)
+        }).unwrap();
+        for id in [&one.id,&two.id] {let speakers=tx(&*store,|repo|Ok(json!(repo.speakers(id)?))).unwrap();assert_eq!(speakers[0]["name"],"Confirmed name");}
     }
 }

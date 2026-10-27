@@ -103,7 +103,7 @@ impl Repository for Data {
                 let mut h = crate::library::header(m);
                 for (key, count) in [
                     ("segmentCount", self.segments.get(&m.id).map_or(0, Vec::len)),
-                    ("speakerCount", self.speakers.get(&m.id).map_or(0, Vec::len)),
+                    ("speakerCount", self.speakers.get(&m.id).map_or(0, |s|s.iter().filter(|s|s["id"]!="unassigned").count())),
                     ("messageCount", self.messages.get(&m.id).map_or(0, Vec::len)),
                     (
                         "bookmarkCount",
@@ -334,6 +334,10 @@ impl Repository for Data {
         value["name"] = json!(name);
         self.generation += 1;
         Ok(())
+    }
+    fn rename_remembered_speaker(&mut self,speaker:&str,name:&str)->Result<()> {
+        for values in self.speakers.values_mut() {for value in values {if value["id"]==speaker {value["name"]=json!(name);}}}
+        self.generation+=1;Ok(())
     }
     fn save_speaker(&mut self, id: &str, speaker: &Value) -> Result<()> {
         self.get(id)?;

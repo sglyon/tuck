@@ -351,6 +351,9 @@ impl Repository for SqlRepository<'_> {
         }
         Ok(())
     }
+    fn rename_remembered_speaker(&mut self,speaker:&str,name:&str)->Result<()> {
+        self.db.execute("UPDATE speakers SET name=? WHERE id=?",params![name,speaker]).map_err(storage)?;Ok(())
+    }
     fn save_speaker(&mut self, id: &str, speaker: &Value) -> Result<()> {
         self.db.execute("INSERT INTO speakers(meeting_id,id,name,color) VALUES(?,?,?,?) ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name,color=excluded.color",params![id,speaker["id"].as_str(),speaker["name"].as_str(),speaker["color"].as_i64()]).map_err(storage)?;
         Ok(())

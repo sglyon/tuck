@@ -16,6 +16,8 @@ pub mod playback;
 pub mod refinement;
 pub mod secrets;
 pub mod speech;
+pub mod voice_memory;
+pub mod live_speakers;
 
 #[cfg(target_os = "macos")]
 pub mod microphone_permission;

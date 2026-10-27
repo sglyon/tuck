@@ -29,6 +29,10 @@ pub trait RecordingPort: Send + Sync {
     fn shutdown(&self) -> Result<()>;
     fn install_model(&self, kind: &str) -> Result<Value>;
     fn unload(&self) -> Result<()>;
+    fn set_voice_memory_enabled(&self,_enabled:bool)->Result<()> {Ok(())}
+    fn forget_voices(&self)->Result<()> {Ok(())}
+    fn voice_profiles(&self) -> Result<Vec<Value>> { Ok(vec![]) }
+    fn rename_voice(&self, _id:&str, _name:&str) -> Result<()> { Ok(()) }
     /// Reprocess retained tracks into a new meeting, leaving source evidence intact.
     fn refine_files(
         &self,
@@ -206,6 +210,12 @@ pub trait Repository {
 
     fn speakers(&mut self, id: &str) -> Result<Vec<Value>>;
     fn rename_speaker(&mut self, id: &str, speaker: &str, name: &str) -> Result<()>;
+    fn rename_remembered_speaker(&mut self,speaker:&str,name:&str)->Result<()> {
+        for meeting in self.list()? {
+            if self.speakers(&meeting.id)?.iter().any(|s|s["id"]==speaker) {self.rename_speaker(&meeting.id,speaker,name)?;}
+        }
+        Ok(())
+    }
     fn save_speaker(&mut self, id: &str, speaker: &Value) -> Result<()>;
     fn messages(&mut self, id: &str) -> Result<Vec<Value>>;
     fn add_message(&mut self, id: &str, message: &Value) -> Result<()>;

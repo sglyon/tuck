@@ -11,7 +11,10 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::Duration,
 };
 use tuck_core::{ports::Result, AppError};
@@ -20,10 +23,28 @@ fn error(message: &str) -> AppError {
 }
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Turn {
-    start: f64,
-    end: f64,
-    speaker_id: String,
+pub(crate) struct Turn {
+    pub start: f64,
+    pub end: f64,
+    pub speaker_id: String,
+}
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct VoiceChunk {
+    #[serde(default)]
+    pub speaker_id: String,
+    pub index: usize,
+    pub start: f64,
+    pub end: f64,
+    pub embedding: Vec<f32>,
+}
+#[derive(Deserialize)]
+pub(crate) struct Diarization {
+    pub segments: Vec<Turn>,
+    #[serde(default)]
+    pub profiles: HashMap<String, Vec<f32>>,
+    #[serde(default)]
+    pub chunks: Vec<VoiceChunk>,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,9 +73,15 @@ fn speaker(turns: &[Turn], start: f64, end: f64) -> String {
         .map(|t| t.speaker_id.clone())
         .unwrap_or_else(|| "unassigned".into())
 }
-fn diarize(models: &ModelManager, path: &Path, source: &str) -> Result<Vec<Turn>> {
+pub(crate) fn analyze(
+    models: &ModelManager,
+    path: &Path,
+    source: &str,
+    live: bool,
+    cancel: Option<&AtomicBool>,
+) -> Result<Diarization> {
     let mut child = Command::new(helper_path("tuck-speech", "TUCK_SPEECH_HELPER")?)
-        .arg("--diarize")
+        .arg(if live { "--identify" } else { "--diarize" })
         .arg(models.diarization_dir())
         .arg(path)
         .arg(source)
@@ -71,15 +98,23 @@ fn diarize(models: &ModelManager, path: &Path, source: &str) -> Result<Vec<Turn>
     std::thread::spawn(move || {
         let mut text = String::new();
         let result = stdout
-            .take(16 * 1024 * 1024)
+            .take(64 * 1024 * 1024)
             .read_to_string(&mut text)
             .map(|_| text);
         let _ = tx.send(result);
     });
-    let response = rx.recv_timeout(Duration::from_secs(300));
-    if response.is_err() {
-        let _ = child.kill();
-    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(300);
+    let response = loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Acquire)) || std::time::Instant::now() > deadline
+        {
+            let _ = child.kill();
+            break Err(mpsc::RecvTimeoutError::Timeout);
+        }
+        match rx.recv_timeout(Duration::from_millis(200)) {
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            result => break result,
+        }
+    };
     let status = child
         .wait()
         .map_err(|_| error("Speaker refinement was interrupted."))?;
@@ -97,15 +132,16 @@ fn diarize(models: &ModelManager, path: &Path, source: &str) -> Result<Vec<Turn>
         .ok_or_else(|| error("Speaker refinement returned no timeline."))?;
     let result: Value = serde_json::from_str(payload)
         .map_err(|_| error("Speaker refinement returned an invalid timeline."))?;
-    let turns: Vec<Turn> = serde_json::from_value(result["segments"].clone())
+    let diarization: Diarization = serde_json::from_value(result)
         .map_err(|_| error("Speaker refinement returned an invalid timeline."))?;
-    if turns
+    if diarization
+        .segments
         .iter()
         .any(|t| !t.start.is_finite() || !t.end.is_finite() || t.start < 0. || t.end < t.start)
     {
         return Err(error("Speaker refinement returned invalid timestamps."));
     }
-    Ok(turns)
+    Ok(diarization)
 }
 fn words(segment: &Value, turns: &[Turn]) -> Result<Vec<Word>> {
     let start = segment["start"].as_f64().unwrap_or(0.);
@@ -294,14 +330,15 @@ fn fuse(system: Vec<Word>, microphone: Vec<Vec<Word>>, other: Vec<Word>) -> Vec<
             if suppress[index] {
                 continue;
             }
-            word.speaker_id = if word.speaker_id == "unassigned" {
-                "unassigned".into()
-            } else {
-                mapping
-                    .get(&word.speaker_id)
-                    .cloned()
-                    .unwrap_or_else(|| format!("microphone-{}", word.speaker_id))
-            };
+            word.speaker_id =
+                if word.speaker_id == "unassigned" || word.speaker_id.starts_with("voice-") {
+                    word.speaker_id.clone()
+                } else {
+                    mapping
+                        .get(&word.speaker_id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("microphone-{}", word.speaker_id))
+                };
             output.push(word);
         }
     }
@@ -332,16 +369,130 @@ fn segments(words: Vec<Word>, meeting: &str) -> Vec<Value> {
     }
     output
 }
+/// Use only strong stored-profile evidence for the delayed live view. New or
+/// ambiguous voices stay unidentified; live batches never enroll new profiles.
+pub(crate) fn live_projection(
+    raw: &[Value],
+    analyses: &HashMap<String, Diarization>,
+    meeting: &str,
+    memory: &super::voice_memory::VoiceMemory,
+    identify_before: f64,
+    window_start: f64,
+    previous: Option<&Value>,
+) -> Result<Value> {
+    let matcher = memory.matcher()?;
+    let mut chunks: HashMap<String, Vec<(&VoiceChunk, Option<String>)>> = HashMap::new();
+    for (source, analysis) in analyses {
+        let mut identities = HashMap::new();
+        for (id, embedding) in &analysis.profiles {
+            let evidence: f64 = analysis
+                .segments
+                .iter()
+                .filter(|t| &t.speaker_id == id)
+                .map(|t| t.end - t.start)
+                .sum();
+            if evidence >= 15. {
+                if let Some(identity) = matcher.identify(embedding) {
+                    identities.insert(id, identity.0);
+                }
+            }
+        }
+        chunks.insert(
+            source.clone(),
+            analysis
+                .chunks
+                .iter()
+                .map(|c| {
+                    let identity = identities
+                        .get(&c.speaker_id)
+                        .filter(|id| matcher.supports(id, &c.embedding))
+                        .cloned();
+                    (c, identity)
+                })
+                .collect(),
+        );
+    }
+    let (mut system, mut microphone, mut other) = (vec![], vec![], vec![]);
+    let mut retained = serde_json::Map::new();
+    for segment in raw {
+        let source = segment["source"].as_str().unwrap_or("import");
+        let empty = Vec::new();
+        let timeline = analyses.get(source).map(|a| &a.segments).unwrap_or(&empty);
+        let mut ws = words(segment, timeline)?;
+        for word in &mut ws {
+            word.speaker_id = "unassigned".into();
+            let key = format!(
+                "{}:{:.6}:{:.6}:{}",
+                word.source, word.start, word.end, word.text
+            );
+            if word.end < window_start {
+                if let Some(id) = previous.and_then(|p| p["_voiceWords"][&key].as_str()) {
+                    word.speaker_id = id.into();
+                    retained.insert(key, json!(id));
+                }
+                continue;
+            }
+            if word.end > identify_before {
+                continue;
+            }
+            let center = (word.start + word.end) / 2.;
+            let mut votes: HashMap<&str, usize> = HashMap::new();
+            let mut indices = std::collections::HashSet::new();
+            let mut total = 0;
+            for (chunk, identity) in chunks.get(source).into_iter().flatten() {
+                if chunk.start <= center && chunk.end >= center {
+                    total += 1;
+                    if let Some(id) = identity {
+                        *votes.entry(id).or_default() += 1;
+                        indices.insert((id, chunk.index));
+                    }
+                }
+            }
+            if let Some((id, count)) = votes.into_iter().max_by_key(|(_, n)| *n) {
+                let independent = indices.iter().filter(|(voice, _)| *voice == id).count();
+                if independent >= 2 && count * 10 >= total * 9 {
+                    word.speaker_id = id.into();
+                    retained.insert(key, json!(id));
+                }
+            }
+        }
+        match source {
+            "system" => system.extend(ws),
+            "microphone" => microphone.push(ws),
+            _ => other.extend(ws),
+        }
+    }
+    let output = segments(fuse(system, microphone, other), meeting);
+    let used: std::collections::HashSet<_> = output
+        .iter()
+        .filter_map(|s| s["speakerId"].as_str())
+        .collect();
+    let speakers = matcher
+        .names()
+        .into_iter()
+        .filter(|s| used.contains(s["id"].as_str().unwrap_or("")))
+        .collect::<Vec<_>>();
+    Ok(
+        json!({"kind":"speaker_projection","_voiceWords":retained,"segments":output,"rawSegmentIds":raw.iter().map(|s|s["id"].clone()).collect::<Vec<_>>(),"speakers":speakers}),
+    )
+}
 pub fn refine(
     models: &ModelManager,
     paths: &[(String, PathBuf)],
     meeting: &str,
     threads: u32,
 ) -> Result<(f64, Vec<Value>)> {
-    models.verify_offline_speakers()?;
-    let mut runtime = SpeechRuntime::load(models, threads, false)?;
-    let (mut system, mut microphone, mut other) = (Vec::new(), Vec::new(), Vec::new());
+    refine_with_memory(models, paths, meeting, threads, None)
+}
+pub fn transcribe_saved(
+    models: &ModelManager,
+    paths: &[(String, PathBuf)],
+    meeting: &str,
+    threads: u32,
+) -> Result<(f64, Vec<Value>)> {
+    let mut runtime = SpeechRuntime::load(models, threads, true)?;
     let mut duration: f64 = 0.;
+    let mut output = vec![];
     for (source, path) in paths {
         let mut reader =
             hound::WavReader::open(path).map_err(|_| error("Saved audio could not be read."))?;
@@ -356,36 +507,102 @@ pub fn refine(
                 "Refinement requires mono 16 kHz PCM saved audio, up to two hours per track.",
             ));
         }
-        let audio: Vec<f32> = reader
+        let audio = reader
             .samples::<i16>()
             .map(|s| s.map(|v| v as f32 / 32768.))
-            .collect::<std::result::Result<_, _>>()
+            .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|_| error("Saved audio is incomplete."))?;
         duration = duration.max(audio.len() as f64 / SAMPLE_RATE as f64);
-        let turns = diarize(models, path, source)?;
         let mut segmenter = Segmenter::new(&models.vad_path())?;
-        let mut process = |chunks: Vec<super::speech::SpeechChunk>| -> Result<()> {
+        let mut consume = |chunks: Vec<super::speech::SpeechChunk>| -> Result<()> {
             for chunk in chunks {
-                if let Some(segment) =
-                    runtime.transcribe(&chunk.samples, chunk.start, source, meeting)?
-                {
-                    let ws = words(&segment, &turns)?;
-                    match source.as_str() {
-                        "system" => system.extend(ws),
-                        "microphone" => microphone.push(ws),
-                        _ => other.extend(ws),
-                    }
+                if let Some(s) = runtime.transcribe(&chunk.samples, chunk.start, source, meeting)? {
+                    output.push(s);
                 }
             }
             Ok(())
         };
         for (index, block) in audio.chunks(1600).enumerate() {
-            process(segmenter.feed(block, index as f64 * 0.1))?;
+            consume(segmenter.feed(block, index as f64 * 0.1))?;
         }
-        process(segmenter.flush())?;
+        consume(segmenter.flush())?;
     }
-    Ok((duration, segments(fuse(system, microphone, other), meeting)))
+    Ok((duration, output))
 }
+pub fn refine_with_memory(
+    models: &ModelManager,
+    paths: &[(String, PathBuf)],
+    meeting: &str,
+    threads: u32,
+    memory: Option<&super::voice_memory::VoiceMemory>,
+) -> Result<(f64, Vec<Value>)> {
+    models.verify_offline_speakers()?;
+    let (duration, raw) = transcribe_saved(models, paths, meeting, threads)?;
+    refine_transcript(models, paths, meeting, memory, duration, &raw)
+}
+pub(crate) fn refine_transcript(
+    models: &ModelManager,
+    paths: &[(String, PathBuf)],
+    meeting: &str,
+    memory: Option<&super::voice_memory::VoiceMemory>,
+    duration: f64,
+    raw: &[Value],
+) -> Result<(f64, Vec<Value>)> {
+    let mut analyses = HashMap::new();
+    for (source, path) in paths {
+        let mut analysis = analyze(models, path, source, false, None)?;
+        if let Some(memory) = memory {
+            let mut mapping = HashMap::new();
+            for (id, embedding) in &analysis.profiles {
+                let seconds = analysis
+                    .segments
+                    .iter()
+                    .filter(|t| &t.speaker_id == id)
+                    .map(|t| t.end - t.start)
+                    .sum();
+                mapping.insert(
+                    id.clone(),
+                    memory
+                        .enroll_or_match(embedding, seconds)?
+                        .map(|p| p.0)
+                        .unwrap_or_else(|| "unassigned".into()),
+                );
+            }
+            for turn in &mut analysis.segments {
+                turn.speaker_id = mapping
+                    .get(&turn.speaker_id)
+                    .cloned()
+                    .unwrap_or_else(|| "unassigned".into());
+            }
+        }
+        analyses.insert(source.clone(), analysis);
+    }
+    let (mut system, mut microphone, mut other) = (vec![], vec![], vec![]);
+    for segment in raw {
+        let source = segment["source"].as_str().unwrap_or("import");
+        let analysis = analyses
+            .get(source)
+            .ok_or_else(|| error("A transcript source has no retained audio."))?;
+        let ws = words(segment, &analysis.segments)?;
+        match source {
+            "system" => system.extend(ws),
+            "microphone" => microphone.push(ws),
+            _ => other.extend(ws),
+        }
+    }
+    let mut output = segments(fuse(system, microphone, other), meeting);
+    if let Some(memory) = memory {
+        let names = memory.names()?;
+        for segment in &mut output {
+            if let Some(n) = names.iter().find(|n| n["id"] == segment["speakerId"]) {
+                segment["speakerName"] = n["name"].clone();
+                segment["speakerColor"] = n["color"].clone();
+            }
+        }
+    }
+    Ok((duration, output))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -397,6 +614,224 @@ mod tests {
             source: source.into(),
             speaker_id: speaker.into(),
         }
+    }
+    #[test]
+    #[ignore = "explicit local saved-audio replay; requires installed Apple models and private case paths"]
+    fn evaluate_delayed_saved_recordings() {
+        use std::sync::Arc;
+        let case = PathBuf::from(std::env::var_os("TUCK_DELAYED_CASE").expect("TUCK_DELAYED_CASE"));
+        let prior =
+            PathBuf::from(std::env::var_os("TUCK_DELAYED_PRIOR").expect("TUCK_DELAYED_PRIOR"));
+        let data =
+            PathBuf::from(std::env::var_os("TUCK_DELAYED_MODELS").expect("TUCK_DELAYED_MODELS"));
+        let output =
+            PathBuf::from(std::env::var_os("TUCK_DELAYED_OUTPUT").expect("TUCK_DELAYED_OUTPUT"));
+        let models = ModelManager::new(&data, Arc::new(|_, _| {}));
+        models.verify_offline_speakers().unwrap();
+        let memory_root = tempfile::Builder::new()
+            .prefix("voice-trial-")
+            .tempdir_in(&case)
+            .unwrap();
+        let memory = super::super::voice_memory::VoiceMemory::new(memory_root.path());
+        let prior_analysis =
+            analyze(&models, &prior.join("system.wav"), "system", false, None).unwrap();
+        let mut prior_names = Vec::new();
+        for (id, embedding) in &prior_analysis.profiles {
+            let seconds = prior_analysis
+                .segments
+                .iter()
+                .filter(|t| &t.speaker_id == id)
+                .map(|t| t.end - t.start)
+                .sum();
+            if let Some(profile) = memory.enroll_or_match(embedding, seconds).unwrap() {
+                prior_names.push(profile.0);
+            }
+        }
+        let paths = ["system", "microphone"]
+            .into_iter()
+            .filter_map(|source| {
+                let path = case.join(format!("{source}.wav"));
+                path.exists().then_some((source.to_owned(), path))
+            })
+            .collect::<Vec<_>>();
+        let started = std::time::Instant::now();
+        let (duration, raw) = if let Some(path) = std::env::var_os("TUCK_DELAYED_RAW") {
+            let saved: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            (
+                saved["duration"].as_f64().unwrap(),
+                saved["rawSegments"].as_array().unwrap().clone(),
+            )
+        } else {
+            transcribe_saved(&models, &paths, "delayed-evaluation", 2).unwrap()
+        };
+        assert!(raw.iter().all(|s| s["speakerId"] == "unassigned"));
+        let mut checkpoints = Vec::new();
+        let mut previous: Option<Value> = None;
+        let mut times = (90..duration as usize)
+            .step_by(30)
+            .map(|n| n as f64)
+            .collect::<Vec<_>>();
+        times.push(duration);
+        for through in times {
+            let window = (through - 300.).max(0.);
+            let stage = tempfile::tempdir_in(&case).unwrap();
+            let mut analyses = HashMap::new();
+            for (source, path) in &paths {
+                let target = stage.path().join(format!("{source}.wav"));
+                if let Some(offset) =
+                    super::super::audio::copy_window(path, &target, window, through).unwrap()
+                {
+                    let mut analysis = analyze(&models, &target, source, true, None).unwrap();
+                    for t in &mut analysis.segments {
+                        t.start += offset;
+                        t.end += offset;
+                    }
+                    for c in &mut analysis.chunks {
+                        c.start += offset;
+                        c.end += offset;
+                    }
+                    analyses.insert(source.clone(), analysis);
+                }
+            }
+            let available = raw
+                .iter()
+                .filter(|s| s["end"].as_f64().unwrap() <= through)
+                .cloned()
+                .collect::<Vec<_>>();
+            let projection = live_projection(
+                &available,
+                &analyses,
+                "delayed-evaluation",
+                &memory,
+                through - 90.,
+                window,
+                previous.as_ref(),
+            )
+            .unwrap();
+            let identified = projection["segments"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|s| s["speakerId"] != "unassigned")
+                .count();
+            checkpoints.push(json!({"through":through,"identifyBefore":through-90.,"segments":projection["segments"],"speakers":projection["speakers"]}));
+            previous = Some(projection);
+            println!(
+                "Delayed checkpoint {:.0}s: {} identified turns",
+                through, identified
+            );
+        }
+        assert_eq!(
+            memory.names().unwrap().len(),
+            prior_names.len(),
+            "live processing must not enroll new voices"
+        );
+        let (_, final_segments) = refine_transcript(
+            &models,
+            &paths,
+            "delayed-evaluation",
+            Some(&memory),
+            duration,
+            &raw,
+        )
+        .unwrap();
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(output).unwrap();
+        serde_json::to_writer(file,&json!({"duration":duration,"elapsedSeconds":started.elapsed().as_secs_f64(),"priorIdentities":prior_names,"rawSegments":raw,"checkpoints":checkpoints,"segments":final_segments,"storedProfiles":memory.names().unwrap()})).unwrap();
+    }
+    #[test]
+    fn live_identification_waits_and_abstains_on_unknown_conflicting_or_single_window_evidence() {
+        let root = tempfile::tempdir().unwrap();
+        let memory = super::super::voice_memory::VoiceMemory::new(root.path());
+        let mut embedding = vec![0.; 256];
+        embedding[0] = 1.;
+        let known = memory.enroll_or_match(&embedding, 20.).unwrap().unwrap();
+        let raw = json!({"id":"raw","meetingId":"meeting","source":"system","start":0.,"end":1.,"text":"Hello.","speakerId":"unassigned","words":[{"word":"Hello.","startTime":0.1,"endTime":0.8}]});
+        let chunk = |index, embedding: Vec<f32>| VoiceChunk {
+            speaker_id: "S1".into(),
+            index,
+            start: 0.,
+            end: 2.,
+            embedding,
+        };
+        let mut analyses = HashMap::new();
+        analyses.insert(
+            "system".into(),
+            Diarization {
+                segments: vec![Turn {
+                    start: 0.,
+                    end: 20.,
+                    speaker_id: "S1".into(),
+                }],
+                profiles: HashMap::from([("S1".into(), embedding.clone())]),
+                chunks: vec![chunk(0, embedding.clone()), chunk(1, embedding.clone())],
+            },
+        );
+        let project = |analyses: &HashMap<String, Diarization>, before| {
+            live_projection(
+                &[raw.clone()],
+                analyses,
+                "meeting",
+                &memory,
+                before,
+                0.,
+                None,
+            )
+            .unwrap()
+        };
+        assert_eq!(
+            project(&analyses, 0.)["segments"][0]["speakerId"],
+            "unassigned"
+        );
+        assert_eq!(project(&analyses, 2.)["segments"][0]["speakerId"], known.0);
+        let previous = project(&analyses, 2.);
+        let after_window = live_projection(
+            &[raw.clone()],
+            &HashMap::new(),
+            "meeting",
+            &memory,
+            400.,
+            300.,
+            Some(&previous),
+        )
+        .unwrap();
+        assert_eq!(
+            after_window["segments"][0]["speakerId"], known.0,
+            "rolling context must retain earlier verified labels"
+        );
+        analyses.get_mut("system").unwrap().chunks.pop();
+        assert_eq!(
+            project(&analyses, 2.)["segments"][0]["speakerId"],
+            "unassigned"
+        );
+        let mut stranger = vec![0.; 256];
+        stranger[1] = 1.;
+        analyses
+            .get_mut("system")
+            .unwrap()
+            .chunks
+            .push(chunk(1, stranger.clone()));
+        assert_eq!(
+            project(&analyses, 2.)["segments"][0]["speakerId"],
+            "unassigned"
+        );
+        analyses.get_mut("system").unwrap().chunks =
+            vec![chunk(0, stranger.clone()), chunk(1, stranger)];
+        assert_eq!(
+            project(&analyses, 2.)["segments"][0]["speakerId"],
+            "unassigned"
+        );
+        assert_eq!(
+            memory.names().unwrap().len(),
+            1,
+            "live analysis must not enroll unknown voices"
+        );
     }
     #[test]
     fn echo_removed_unique_interjection_preserved_and_repeated_phrase_kept() {

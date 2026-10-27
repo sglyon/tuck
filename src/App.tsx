@@ -243,6 +243,7 @@ export default function App() {
   const globalDictation = useGlobalDictation();
   const [status, setStatus] = useState<EngineStatus>(emptyStatus);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [refiningMeeting,setRefiningMeeting]=useState<string|null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("meeting");
   const [newMenuOpen, setNewMenuOpen] = useState(false);
@@ -601,6 +602,10 @@ export default function App() {
               : null,
             recordingState: p.state as string,
           }));
+          break;
+        case "meeting_refinement":
+          setRefiningMeeting(p.state === "processing" ? String(p.meetingId) : null);
+          if (p.state === "processing") notify("Recording saved. Refining transcript and speakers locally…");
           break;
         case "model_progress": {
           const stage = String(p.stage).toLowerCase();
@@ -1056,6 +1061,7 @@ export default function App() {
       merge(m);
       await refreshStatus();
       if (method === "stop_recording") {
+        if (m.id !== meeting.id && selectedRef.current === meeting.id) choose(m.id);
         setClockValues((v) => ({ ...v, [m.id]: m.duration }));
         if (dictation) setTab("notes");
         notify(dictation ? "Voice note saved on this device." : "Conversation saved on this device.");
@@ -1886,6 +1892,8 @@ export default function App() {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
                 />
+                {refiningMeeting === meeting.id && <p className="quiet-note" role="status"><LoaderCircle size={14} className="spin" /> Recording saved. Improving speaker labels and transcript locally…</p>}
+                {active && !dictation && <p className="quiet-note">Text appears now. {settings.rememberVoices && status.offlineSpeakerModelInstalled ? "Confident matches to saved voices follow about 90 seconds later. Unfamiliar voices stay unidentified." : "Speakers stay unidentified during recording."}</p>}
                 <div className="meeting-metadata">
                   <span>{fullDate(meeting.createdAt)}</span>
                   <span className="metadata-separator">·</span>
@@ -1893,12 +1901,12 @@ export default function App() {
                     <Clock size={13} />
                     {active ? clock(elapsed) : duration(meeting.duration)}
                   </span>
-                  {meeting.speakers.length > 0 && (
+                  {meeting.speakers.some((s) => s.id !== "unassigned") && (
                     <>
                       <span className="metadata-separator">·</span>
                       <span>
                         <Users size={13} />
-                        {meeting.speakers.length} speakers
+                        {meeting.speakers.filter((s) => s.id !== "unassigned").length} speakers
                       </span>
                     </>
                   )}
@@ -2489,9 +2497,9 @@ export default function App() {
                         {visibleSegments.length} segments
                       </span>
                     </div>
-                    {meeting.speakers.length > 0 && (
+                    {meeting.speakers.some((s) => s.id !== "unassigned") && (
                       <div className="speaker-legend">
-                        {meeting.speakers.map((s) => (
+                        {meeting.speakers.filter((s) => s.id !== "unassigned").map((s) => (
                           <button
                             key={s.id}
                             title="Edit speaker name"
@@ -2528,10 +2536,10 @@ export default function App() {
                           id={`segment-${s.id}`}
                           className={`transcript-segment${highlight === s.id ? " highlighted" : ""}`}
                         >
-                          <Avatar speaker={speaker} />
+                          {s.speakerId !== "unassigned" && <Avatar speaker={speaker} />}
                           <div className="segment-body">
                             <div className="segment-heading">
-                              <button
+                              {s.speakerId !== "unassigned" && <button
                                 className="speaker-name"
                                 onClick={() => {
                                   setRenameSpeaker(speaker);
@@ -2539,7 +2547,7 @@ export default function App() {
                                 }}
                               >
                                 {speaker.name}
-                              </button>
+                              </button>}
                               <span className="segment-source">
                                 {s.source === "microphone"
                                   ? "Microphone"
@@ -3001,8 +3009,9 @@ function SpeakerDialog({
           </button>
         </div>
         <p>
-          Names apply to this conversation. Speaker separation is provisional;
-          you can correct it here.
+          {speaker.id.startsWith("voice-")
+            ? "This name follows the saved voice across meetings on this Mac."
+            : "Names apply to this conversation. Speaker separation is provisional; you can correct it here."}
         </p>
         <div className="speaker-input">
           <Avatar speaker={speaker} />

@@ -303,6 +303,49 @@ pub fn copy_normalized(source: &Path, target: &Path) -> Result<PcmWav> {
     Ok(info)
 }
 
+/// Copy a bounded, immutable context from a still-growing PCM recording.
+pub fn copy_window(source: &Path, target: &Path, start: f64, end: f64) -> Result<Option<f64>> {
+    let mut file = open_regular(source)?;
+    let info = inspect(&mut file)?;
+    let first = (start.max(0.) * info.rate as f64).floor() as u64;
+    let last = ((end.max(0.) * info.rate as f64).floor() as u64).min(info.frames());
+    if last <= first {
+        return Ok(None);
+    }
+    let bytes = (last - first) * info.channels as u64 * 2;
+    let normalized = PcmWav {
+        channels: info.channels,
+        rate: info.rate,
+        offset: 44,
+        bytes,
+        repairable: false,
+    };
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut out = options
+        .open(target)
+        .map_err(|_| error("Speaker context could not be saved."))?;
+    out.write_all(&normalized.header())
+        .map_err(|_| error("Speaker context could not be saved."))?;
+    file.seek(SeekFrom::Start(
+        info.offset + first * info.channels as u64 * 2,
+    ))
+    .map_err(|_| error("Speaker context could not be read."))?;
+    let copied = std::io::copy(&mut file.take(bytes), &mut out)
+        .map_err(|_| error("Speaker context could not be read."))?;
+    if copied != bytes {
+        return Err(error("Speaker context changed while copying."));
+    }
+    out.sync_all()
+        .map_err(|_| error("Speaker context could not be saved."))?;
+    Ok(Some(first as f64 / info.rate as f64))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -322,6 +365,37 @@ pub(crate) mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&header).unwrap();
         file.set_len(44 + bytes).unwrap();
+    }
+    #[test]
+    fn context_copy_is_bounded_timed_and_preserves_original() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("source.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&source, spec).unwrap();
+        for i in 0..32000 {
+            writer.write_sample(i as i16).unwrap();
+        }
+        writer.finalize().unwrap();
+        let original = fs::read(&source).unwrap();
+        let target = root.path().join("window.wav");
+        assert_eq!(copy_window(&source, &target, 0.5, 1.5).unwrap(), Some(0.5));
+        let mut reader = hound::WavReader::open(target).unwrap();
+        let samples = reader
+            .samples::<i16>()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(samples.len(), 16000);
+        assert_eq!(samples[0], 8000);
+        assert_eq!(samples[15999], 23999);
+        assert_eq!(fs::read(&source).unwrap(), original);
+        let empty = root.path().join("empty.wav");
+        assert_eq!(copy_window(&source, &empty, 3., 4.).unwrap(), None);
+        assert!(!empty.exists());
     }
     #[test]
     fn virtual_header_and_copy_repair_preserve_original() {

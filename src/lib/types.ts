@@ -159,6 +159,8 @@ export interface Settings {
   } | null;
   threads: number;
   keepAudio: boolean;
+  autoRefine: boolean;
+  rememberVoices: boolean;
   hasOpenAIKey: boolean;
   hasNotionToken: boolean;
   customTemplates: Template[];

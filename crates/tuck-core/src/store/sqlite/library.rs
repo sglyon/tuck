@@ -18,7 +18,7 @@ const HEADER: &str = "json_object(
  'taskCount',coalesce(json_array_length(m.document,'$.tasks'),0),
  'openTaskCount',(SELECT count(*) FROM json_each(m.document,'$.tasks') t WHERE coalesce(json_extract(t.value,'$.done'),0)=0),
  'segmentCount',(SELECT count(*) FROM segments s WHERE s.meeting_id=m.id),
- 'speakerCount',(SELECT count(*) FROM speakers s WHERE s.meeting_id=m.id),
+ 'speakerCount',(SELECT count(*) FROM speakers s WHERE s.meeting_id=m.id AND s.id!='unassigned'),
  'messageCount',(SELECT count(*) FROM messages s WHERE s.meeting_id=m.id),
  'bookmarkCount',(SELECT count(*) FROM bookmarks s WHERE s.meeting_id=m.id))";
 
