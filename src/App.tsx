@@ -2537,7 +2537,7 @@ export default function App() {
                           id={`segment-${s.id}`}
                           className={`transcript-segment${highlight === s.id ? " highlighted" : ""}`}
                         >
-                          {s.speakerId !== "unassigned" && <Avatar speaker={speaker} />}
+                          {s.speakerId !== "unassigned" ? <Avatar speaker={speaker} /> : <span className="avatar-placeholder" aria-hidden="true" />}
                           <div className="segment-body">
                             <div className="segment-heading">
                               {s.speakerId !== "unassigned" && <button
@@ -2549,6 +2549,17 @@ export default function App() {
                               >
                                 {speaker.name}
                               </button>}
+                              {s.speakerId === "unassigned" && <span className="speaker-unidentified">Unidentified</span>}
+                              <button
+                                className="segment-time"
+                                onClick={() => {
+                                  setHighlight(s.id);
+                                  setFollowLive(false);
+                                  audioSeek.current?.(s.start);
+                                }}
+                              >
+                                {clock(s.start)}
+                              </button>
                               {!correctionDrafts[JSON.stringify([meeting.id, s.id])] && <button
                                 className="segment-edit"
                                 aria-label="Correct words"
@@ -2561,18 +2572,8 @@ export default function App() {
                                   text: s.text,
                                 })}
                               >
-                                <Pencil size={13} />
+                                <Pencil size={10} strokeWidth={1.6} />
                               </button>}
-                              <button
-                                className="segment-time"
-                                onClick={() => {
-                                  setHighlight(s.id);
-                                  setFollowLive(false);
-                                  audioSeek.current?.(s.start);
-                                }}
-                              >
-                                {clock(s.start)}
-                              </button>
                               <button
                                 className={`segment-bookmark${bookmark ? " bookmarked" : ""}`}
                                 aria-label={

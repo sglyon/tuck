@@ -3,11 +3,12 @@ import { test, expect, type Page } from "@playwright/test";
 import { exampleMeeting } from "../../src/lib/example";
 import { defaults } from "../../src/lib/bridge";
 
-async function safetyPort(page: Page, duplicateSegments = false) {
+async function safetyPort(page: Page, duplicateSegments = false, unidentified = false) {
   await installLeanLibraryPort(page);
   const meeting = exampleMeeting();
   meeting.isExample = false;
   meeting.status = "interrupted";
+  if (unidentified) meeting.segments[1].speakerId = "unassigned";
   await page.addInitScript(
     ({ meeting, settings, duplicateSegments }) => {
       const state = window as any;
@@ -200,6 +201,7 @@ test("corrections remain explicit, keep original speech recognition and can be r
   await page.getByRole("tab", { name: /^Transcript/ }).click();
   const segment = page.locator(".transcript-segment").first();
   const original = await segment.locator(".segment-body > p").textContent();
+  await segment.hover();
   await segment
     .getByRole("button", { name: "Correct words", exact: true })
     .click();
@@ -243,6 +245,7 @@ test("conflicted correction drafts survive view changes and block hide and file 
   await safetyPort(page);
   await page.getByRole("tab", { name: /^Transcript/ }).click();
   const segment = page.locator(".transcript-segment").first();
+  await segment.hover();
   await segment
     .getByRole("button", { name: "Correct words", exact: true })
     .click();
@@ -434,6 +437,7 @@ test("correction drafts belong to a meeting and segment together", async ({
   const first = await safetyPort(page, true);
   await page.getByRole("tab", { name: /^Transcript/ }).click();
   const segment = page.locator(".transcript-segment").first();
+  await segment.hover();
   await segment
     .getByRole("button", { name: "Correct words", exact: true })
     .click();
@@ -445,6 +449,7 @@ test("correction drafts belong to a meeting and segment together", async ({
     .filter({ hasText: "Second saved meeting" })
     .click();
   await expect(page.locator(".correction-editor")).toHaveCount(0);
+  await segment.hover();
   await segment
     .getByRole("button", { name: "Correct words", exact: true })
     .click();
@@ -496,3 +501,39 @@ test("restore reapplies an existing library query instead of displaying unfilter
   ).toBeVisible();
   await expect(page.locator(".meeting-item")).toHaveCount(0);
 });
+
+
+for (const width of [1320, 600]) {
+  test(`transcript actions stay subordinate and unidentified text aligns at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await safetyPort(page, false, true);
+    await page.getByRole("tab", { name: /^Transcript/ }).click();
+    const rows = page.locator(".transcript-segment");
+    const named = rows.first();
+    const unknown = rows.nth(1);
+    await named.scrollIntoViewIfNeeded();
+    await expect(unknown.getByText("Unidentified", { exact: true })).toBeVisible();
+    const textX = await named.locator(".segment-body > p").evaluate(el => el.getBoundingClientRect().left);
+    const unknownX = await unknown.locator(".segment-body > p").evaluate(el => el.getBoundingClientRect().left);
+    expect(Math.abs(textX - unknownX)).toBeLessThan(1);
+    const pen = unknown.getByRole("button", { name: "Correct words", exact: true });
+    await page.mouse.move(0,0);
+    await expect(pen).toHaveCSS("opacity", "0");
+    await unknown.hover();
+    await expect(pen).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: testInfo.outputPath("transcript-hover.png") });
+    const iconWidth = await pen.locator("svg").evaluate(el => el.getBoundingClientRect().width);
+    const nameSize = await named.locator(".speaker-name").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+    expect(iconWidth).toBeLessThan(nameSize);
+    const penBox = await pen.boundingBox();
+    const timeBox = await unknown.locator(".segment-time").boundingBox();
+    expect(penBox!.x).toBeGreaterThan(timeBox!.x);
+    await page.mouse.move(0,0);
+    await page.screenshot({ path: testInfo.outputPath("transcript-rest.png") });
+    await pen.focus();
+    await expect(pen).toHaveCSS("opacity", "1");
+    await pen.press("Enter");
+    await expect(unknown.getByRole("textbox", { name: /Correction at/ })).toBeVisible();
+    await unknown.getByRole("button", { name: "Cancel", exact: true }).click();
+  });
+}

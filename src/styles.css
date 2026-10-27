@@ -1201,22 +1201,41 @@ kbd {
   font-size: 10px;
   color: #616872;
 }
+.avatar-placeholder {
+  flex: 0 0 26px;
+  height: 26px;
+}
+.speaker-unidentified {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
 .segment-edit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
+  padding: 7px;
   border-radius: 5px;
   color: #667185;
+  opacity: 0;
+}
+.segment-edit svg { width: 10px; height: 10px; flex-shrink: 0; }
+.transcript-segment:hover .segment-edit,
+.transcript-segment:focus-within .segment-edit {
+  opacity: 1;
+}
+@media (hover: none) {
+  .segment-edit { opacity: 1; }
 }
 .segment-edit:hover:not(:disabled),
 .segment-edit:focus-visible {
   color: var(--accent);
   background: var(--accent-soft);
 }
-.segment-edit:disabled { opacity: 0.45; }
+.segment-edit:disabled { pointer-events: none; }
 .segment-time {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
