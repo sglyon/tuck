@@ -174,6 +174,7 @@ export interface EngineStatus {
   modelDownloading: boolean;
   modelProgress: number;
   speakerModelInstalled: boolean;
+  offlineSpeakerModelInstalled?: boolean;
   activeMeetingId: string | null;
   recordingState: string;
   captureAvailable: boolean;

@@ -89,3 +89,29 @@ record audio or use accounts.
 The original-encoder benchmark in `benchmarks/apple-speech` is separate from this
 production model choice. See `docs/apple-speech-evaluation.md` for measured
 results, conversion differences, known limits, and Apple compute-plan evidence.
+
+## Saved-meeting refinement
+
+Optional full-track diarization uses FluidAudio's offline Community-1 pipeline
+with PLDA/VBx clustering rather than greedy clustering of independent VAD
+embeddings. `diarization-models.json` pins the separately installed 21,599,417-byte
+model set. Inference uses an explicit local-only loader; it does not call SDK
+model-download APIs. Rust verifies every model hash before launching:
+
+```sh
+src-tauri/binaries/tuck-speech --diarize MODEL_DIRECTORY SAVED_WAV SOURCE
+```
+
+ASR keeps VAD context and reports word timings. Rust assigns words to full-track
+speaker turns, aligns simultaneous channel phrases, and suppresses repeated
+microphone spans while retaining unmatched boundaries and unique utterances.
+Microphone labels are mapped through shared speech evidence rather than assumed
+to be the local user. Uncertain speech stays unassigned. The app's **Saved audio
+→ Refine transcript** command creates a derived meeting with original evidence
+unchanged. Live labels remain provisional. This pass currently supports Apple
+silicon, mono 16 kHz PCM tracks up to two hours, and the Apple ASR backend.
+
+The diagnostics-only `tuck-audio-eval` binary invokes this same production pass
+without a database, devices, or hosted AI. Use `scripts/evaluate-meeting.py` to
+preserve a read-only private baseline and compare new candidate outputs. Meeting
+audio, text, speaker vectors, and reference transcripts belong outside Git.

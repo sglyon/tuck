@@ -108,6 +108,10 @@ struct TuckSpeech {
     static func main() async {
         do {
             let arguments = Array(CommandLine.arguments.dropFirst())
+            if arguments.count == 4 && arguments[0] == "--diarize" {
+                try await diarize(models: arguments[1], audio: arguments[2], source: arguments[3])
+                return
+            }
             guard arguments.count == 2 || arguments.count == 3,
                   arguments[0] == "--models",
                   arguments.count == 2 || arguments[2] == "--prepare" else {
@@ -154,7 +158,12 @@ struct TuckSpeech {
                         ["token": token.token, "startTime": max(0, min(duration, token.startTime)),
                          "endTime": max(0, min(duration, token.endTime)), "confidence": token.confidence]
                     }
-                    try emit(["id": id, "text": result.text, "duration": duration, "tokenTimings": tokens])
+                    let words: [[String: Any]] = buildWordTimings(from: result.tokenTimings ?? []).map { word in
+                        let included = (result.tokenTimings ?? []).filter { $0.endTime >= word.startTime && $0.startTime <= word.endTime }
+                        let confidence = included.isEmpty ? 0 : included.reduce(Float(0)) { $0 + $1.confidence } / Float(included.count)
+                        return ["word":word.word, "startTime":max(0,min(duration,word.startTime)), "endTime":max(0,min(duration,word.endTime)), "confidence":confidence]
+                    }
+                    try emit(["id": id, "text": result.text, "duration": duration, "tokenTimings": tokens, "words": words])
                 } catch {
                     // No transcript or PCM is included in diagnostics.
                     try emit(["id": id, "error": error.localizedDescription])

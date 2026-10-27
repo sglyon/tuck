@@ -104,6 +104,8 @@ struct Capture {
     fail_configure: Mutex<bool>,
     partial_start: Mutex<bool>,
     fail_stop: Mutex<bool>,
+    refined_paths: Mutex<Vec<(String,String)>>,
+    fail_refine: Mutex<bool>,
     flush_on_pause: Mutex<bool>,
     shutdown_calls: Mutex<usize>,
 }
@@ -169,6 +171,12 @@ impl RecordingPort for Capture {
     }
     fn unload(&self) -> Result<()> {
         Ok(())
+    }
+    fn refine_files(&self, paths:&[(String,String)], id:&str, on:OnSegment, _:u32)->Result<f64> {
+        *self.refined_paths.lock().unwrap()=paths.to_vec();
+        on(segment(id,"refined"))?;
+        if *self.fail_refine.lock().unwrap(){return Err(AppError::unavailable("Refinement failed"));}
+        Ok(10.)
     }
     fn import_file(&self, _: &str, id: &str, on: OnSegment, _: u32) -> Result<f64> {
         on(segment(id, "import"))?;
@@ -350,6 +358,7 @@ struct ArchiveGate {
 }
 #[derive(Default)]
 struct Archive {
+    dual_tracks: Mutex<bool>,
     backup_gate: Mutex<Option<Arc<ArchiveGate>>>,
     backup: Mutex<Option<Value>>,
     restore_maps: Mutex<Vec<Value>>,
@@ -360,12 +369,12 @@ struct Archive {
 }
 impl AudioArchivePort for Archive {
     fn list(&self, _: &str) -> Result<Vec<Value>> {
-        Ok(vec![
-            json!({"id":"microphone.wav","name":"Microphone","bytes":320044,"duration":10}),
-        ])
+        let mut files=vec![json!({"id":"microphone.wav","name":"Microphone","bytes":320044,"duration":10})];
+        if *self.dual_tracks.lock().unwrap(){files.push(json!({"id":"system.wav","name":"System","bytes":320044,"duration":10}));}
+        Ok(files)
     }
     fn resolve(&self, _: &str, audio_id: &str) -> Result<String> {
-        if audio_id != "microphone.wav" {
+        if audio_id != "microphone.wav" && !(audio_id=="system.wav" && *self.dual_tracks.lock().unwrap()) {
             return Err(AppError::invalid("Missing audio"));
         }
         Ok("/fixture/source.wav".into())
@@ -2418,6 +2427,32 @@ fn bootstrap_credential_flags_use_presence_without_reading_or_decrypting_values(
             let startup = call(&service, method, json!({}));
             assert_eq!(startup["settings"]["hasNotionToken"], true);
             assert_eq!(startup["settings"]["hasOpenAIKey"], false);
+        }
+    }
+}
+
+#[test]
+fn refinement_uses_both_tracks_and_preserves_original_on_success_and_failure() {
+    for fail in [false,true] {
+        for store in stores() {
+            let r=rig(store);
+            let original=call(&r.service,"create_meeting",json!({"title":"Evidence"}));
+            let id=original["id"].as_str().unwrap();
+            let original=r.service.meeting(id).unwrap();
+            *r.archive.dual_tracks.lock().unwrap()=true;
+            *r.capture.fail_refine.lock().unwrap()=fail;
+            let result=r.service.handle("refine_audio",json!({"meetingId":id}));
+            assert_eq!(result.is_err(),fail);
+            if let Ok(refined)=result {
+                assert_ne!(refined["id"],id);
+                assert_eq!(refined["recoveredFrom"],id);
+                assert_eq!(refined["duration"],10.);
+                assert_eq!(refined["segments"].as_array().unwrap().len(),1);
+            }
+            assert_eq!(r.capture.refined_paths.lock().unwrap().iter().map(|(s,_)|s.as_str()).collect::<Vec<_>>(),vec!["microphone","system"]);
+            assert_eq!(r.service.meeting(id).unwrap(),original);
+            assert!(r.ai.calls.lock().unwrap().is_empty());
+            assert!(r.archive.removed.lock().unwrap().is_empty());
         }
     }
 }

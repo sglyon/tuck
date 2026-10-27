@@ -13,6 +13,7 @@ pub mod notifications;
 pub mod notion;
 pub mod notion_auth;
 pub mod playback;
+pub mod refinement;
 pub mod secrets;
 pub mod speech;
 

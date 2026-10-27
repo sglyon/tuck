@@ -9,8 +9,8 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-mod dictation_cleanup;
 mod coach;
+mod dictation_cleanup;
 mod meeting_day;
 mod notion_setup;
 mod safety;
@@ -441,13 +441,14 @@ impl MeetingService {
         Ok(true)
     }
     fn import_audio(self: &Arc<Self>, path: &str, title: &str) -> Result<Value> {
-        self.import_audio_with_source(path, title, None)
+        self.import_audio_with_source(path, title, None, None)
     }
     fn import_audio_with_source(
         self: &Arc<Self>,
         path: &str,
         title: &str,
         source: Option<&Meeting>,
+        refinement: Option<&[(String, String)]>,
     ) -> Result<Value> {
         let id;
         let keep;
@@ -474,24 +475,30 @@ impl MeetingService {
             })?;
             keep = settings["keepAudio"] == true;
             lock(&self.state)?.active = Some(id.clone());
-            let result = self
-                .adapters
-                .capture
-                .import_file(
+            let result = (if let Some(paths) = refinement {
+                self.adapters.capture.refine_files(
+                    paths,
+                    &id,
+                    self.callback(&id),
+                    settings["threads"].as_u64().unwrap_or(2) as u32,
+                )
+            } else {
+                self.adapters.capture.import_file(
                     path,
                     &id,
                     self.callback(&id),
                     settings["threads"].as_u64().unwrap_or(2) as u32,
                 )
-                .and_then(|duration| {
-                    self.transaction(|r| {
-                        let mut m = r.get(&id)?;
-                        m.complete(duration)?;
-                        Self::seed_dictation_notes(r, &mut m)?;
-                        r.save(&mut m)?;
-                        Ok(Value::Null)
-                    })
-                });
+            })
+            .and_then(|duration| {
+                self.transaction(|r| {
+                    let mut m = r.get(&id)?;
+                    m.complete(duration)?;
+                    Self::seed_dictation_notes(r, &mut m)?;
+                    r.save(&mut m)?;
+                    Ok(Value::Null)
+                })
+            });
             lock(&self.state)?.active = None;
             if let Err(error) = result {
                 self.interrupted(&id)?;
@@ -754,7 +761,7 @@ impl MeetingService {
             "reset_transcript" => self.correct_transcript(p, true),
             "meeting_audio" => self.meeting_audio(p, false),
             "audio_source" => self.meeting_audio(p, true),
-            "recover_audio" => self.recover_audio(p),
+            "recover_audio" | "refine_audio" => self.recover_audio(p, method == "refine_audio"),
             "backup_library" => self.backup_library(p),
             "preview_restore_library" => self.restore_library(p, true),
             "restore_library" => self.restore_library(p, false),
@@ -850,7 +857,7 @@ impl MeetingService {
                 let _life = lock(&self.lifecycle)?;
                 self.assert_idle()?;
                 let kind = optional(p, "kind", "parakeet")?;
-                if !matches!(kind, "parakeet" | "speakers") {
+                if !matches!(kind, "parakeet" | "speakers" | "speakers-offline") {
                     return Err(AppError::invalid("Unknown speech model."));
                 }
                 self.adapters.capture.install_model(kind)

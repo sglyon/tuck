@@ -235,6 +235,8 @@ impl Repository for SqlRepository<'_> {
             .map_err(storage)?;
         let name = if s.speaker_id == "you" {
             "You".into()
+        } else if s.speaker_id == "unassigned" {
+            "Unassigned".into()
         } else {
             format!(
                 "Speaker {}",

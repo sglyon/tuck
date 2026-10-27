@@ -614,6 +614,9 @@ export default function App() {
             ...(stage === "installed" && p.kind === "parakeet"
               ? { modelInstalled: true }
               : {}),
+            ...(stage === "installed" && p.kind === "speakers-offline"
+              ? { offlineSpeakerModelInstalled: true }
+              : {}),
             ...(stage === "installed" && p.kind === "speakers"
               ? { speakerModelInstalled: true }
               : {}),

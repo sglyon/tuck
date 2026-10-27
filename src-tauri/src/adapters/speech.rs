@@ -167,7 +167,7 @@ impl AppleRecognizer {
         }
         Ok(engine)
     }
-    fn transcribe(&mut self, samples: &[f32]) -> Result<String> {
+    fn transcribe(&mut self, samples: &[f32]) -> Result<Value> {
         if samples.len() > 240_000 {
             return Err(error("The speech segment exceeded the local engine limit."));
         }
@@ -194,10 +194,10 @@ impl AppleRecognizer {
                 "Apple speech could not transcribe this segment. Audio has been preserved.",
             ));
         }
-        response["text"]
-            .as_str()
-            .map(str::to_owned)
-            .ok_or_else(|| error("Apple speech returned an invalid result."))
+        if !response["text"].is_string() {
+            return Err(error("Apple speech returned an invalid result."));
+        }
+        Ok(response)
     }
 }
 impl Drop for AppleRecognizer {
@@ -236,7 +236,9 @@ fn load_speaker_extractor(
 impl SpeechRuntime {
     pub fn is_alive(&mut self) -> bool {
         match &mut self.recognizer {
-            Recognizer::Apple(engine) => engine.child.try_wait().is_ok_and(|status| status.is_none()),
+            Recognizer::Apple(engine) => {
+                engine.child.try_wait().is_ok_and(|status| status.is_none())
+            }
             Recognizer::Cpu(_) => true,
         }
     }
@@ -285,19 +287,19 @@ impl SpeechRuntime {
         source: &str,
         meeting: &str,
     ) -> Result<Option<Value>> {
-        let text = match &mut self.recognizer {
+        let recognized = match &mut self.recognizer {
             Recognizer::Apple(engine) => engine.transcribe(samples)?,
             Recognizer::Cpu(engine) => {
                 let stream = engine.create_stream();
                 stream.accept_waveform(SAMPLE_RATE as i32, samples);
                 engine.decode(&stream);
-                stream
+                let result = stream
                     .get_result()
-                    .ok_or_else(|| error("The local speech engine returned no result."))?
-                    .text
+                    .ok_or_else(|| error("The local speech engine returned no result."))?;
+                json!({"text":result.text})
             }
         };
-        let text = text.trim();
+        let text = recognized["text"].as_str().unwrap_or("").trim();
         if text.is_empty() {
             return Ok(None);
         }
@@ -322,7 +324,7 @@ impl SpeechRuntime {
             }
         }
         Ok(Some(
-            json!({"id":uuid::Uuid::new_v4().to_string(),"meetingId":meeting,"start":(start.max(0.0)*1000.0).round()/1000.0,"end":((start.max(0.0)+samples.len()as f64/SAMPLE_RATE as f64)*1000.0).round()/1000.0,"text":text,"speakerId":speaker,"source":source}),
+            json!({"id":uuid::Uuid::new_v4().to_string(),"meetingId":meeting,"start":(start.max(0.0)*1000.0).round()/1000.0,"end":((start.max(0.0)+samples.len()as f64/SAMPLE_RATE as f64)*1000.0).round()/1000.0,"text":text,"speakerId":speaker,"source":source,"words":recognized["words"]}),
         ))
     }
 }
@@ -378,6 +380,38 @@ pub struct SpeechChunk {
     pub samples: Vec<f32>,
     pub start: f64,
 }
+const MAX_ASR_CHUNK_SAMPLES: usize = SAMPLE_RATE as usize * 12;
+pub(crate) fn bounded_speech_chunks(samples: &[f32], start: f64) -> Vec<SpeechChunk> {
+    let mut chunks = Vec::new();
+    let mut offset = 0;
+    while samples.len() - offset > MAX_ASR_CHUNK_SAMPLES {
+        // Prefer a low-energy 20 ms boundary in the final two seconds of the
+        // window, instead of blindly cutting a continuous word at exactly 12 s.
+        let lower = offset + MAX_ASR_CHUNK_SAMPLES - SAMPLE_RATE as usize * 2;
+        let upper = offset + MAX_ASR_CHUNK_SAMPLES;
+        let cut = (lower..=upper - 320)
+            .step_by(160)
+            .min_by(|&a, &b| {
+                let energy = |i: usize| samples[i..i + 320].iter().map(|x| x * x).sum::<f32>();
+                energy(a).total_cmp(&energy(b))
+            })
+            .unwrap_or(upper)
+            + 160;
+        chunks.push(SpeechChunk {
+            samples: samples[offset..cut].to_vec(),
+            start: start + offset as f64 / SAMPLE_RATE as f64,
+        });
+        offset = cut;
+    }
+    if offset < samples.len() {
+        chunks.push(SpeechChunk {
+            samples: samples[offset..].to_vec(),
+            start: start + offset as f64 / SAMPLE_RATE as f64,
+        });
+    }
+    chunks
+}
+
 pub struct Segmenter {
     vad: VoiceActivityDetector,
     pending: Vec<f32>,
@@ -424,10 +458,12 @@ impl Segmenter {
             let start = front.start().max(0) as usize;
             let length = front.samples().len().min(self.total.saturating_sub(start));
             if length > 0 {
-                result.push(SpeechChunk {
-                    samples: front.samples()[..length].to_vec(),
-                    start: self.offset.unwrap_or(0.0) + start as f64 / SAMPLE_RATE as f64,
-                });
+                // VAD's max_speech_duration is a heuristic, not a hard bound.
+                // Split every sample exactly once before calling a bounded ASR.
+                result.extend(bounded_speech_chunks(
+                    &front.samples()[..length],
+                    self.offset.unwrap_or(0.0) + start as f64 / SAMPLE_RATE as f64,
+                ));
             }
             self.vad.pop();
         }
@@ -487,6 +523,26 @@ impl PcmResampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn long_speech_is_bounded_without_losing_or_duplicating_samples() {
+        let samples: Vec<_> = (0..(SAMPLE_RATE as usize * 40 + 17))
+            .map(|i| (i % 100) as f32 / 100.0)
+            .collect();
+        let chunks = bounded_speech_chunks(&samples, 372.102);
+        assert!(chunks
+            .iter()
+            .all(|c| c.samples.len() <= MAX_ASR_CHUNK_SAMPLES));
+        let joined: Vec<_> = chunks
+            .iter()
+            .flat_map(|c| c.samples.iter().copied())
+            .collect();
+        assert_eq!(joined, samples);
+        let mut offset = 0;
+        for c in chunks {
+            assert!((c.start - (372.102 + offset as f64 / SAMPLE_RATE as f64)).abs() < 1e-9);
+            offset += c.samples.len();
+        }
+    }
     #[test]
     fn disabled_speaker_recognition_does_not_verify_or_load_an_installed_model() {
         let root = tempfile::tempdir().unwrap();

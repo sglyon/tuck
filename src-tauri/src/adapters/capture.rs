@@ -211,7 +211,7 @@ impl Pipeline for SpeechPipeline {
         Ok(())
     }
 }
-fn inference_loop(receiver: Receiver<Work>, pipeline: &mut dyn Pipeline) -> Result<()> {
+fn inference_loop(receiver: &Receiver<Work>, pipeline: &mut dyn Pipeline) -> Result<()> {
     while let Ok(work) = receiver.recv() {
         match work {
             Work::Audio {
@@ -769,16 +769,31 @@ struct WarmSpeech<T> {
     ready: Option<(u32, T)>,
 }
 impl<T> Default for WarmSpeech<T> {
-    fn default() -> Self { Self { generation: 0, ready: None } }
+    fn default() -> Self {
+        Self {
+            generation: 0,
+            ready: None,
+        }
+    }
 }
 impl<T> WarmSpeech<T> {
     fn take(&mut self, threads: u32) -> (u64, Option<T>) {
-        (self.generation, self.ready.take().and_then(|(key, runtime)| (key == threads).then_some(runtime)))
+        (
+            self.generation,
+            self.ready
+                .take()
+                .and_then(|(key, runtime)| (key == threads).then_some(runtime)),
+        )
     }
     fn put(&mut self, generation: u64, threads: u32, runtime: T) {
-        if self.generation == generation { self.ready = Some((threads, runtime)); }
+        if self.generation == generation {
+            self.ready = Some((threads, runtime));
+        }
     }
-    fn clear(&mut self) { self.generation = self.generation.wrapping_add(1); self.ready = None; }
+    fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.ready = None;
+    }
 }
 
 pub struct CaptureEngine {
@@ -816,23 +831,35 @@ impl CaptureEngine {
     /// Load verified local weights only; never opens an audio stream or requests
     /// permission. Host activation is explicit so diagnostic composition is inert.
     pub fn prewarm_dictation(self: &Arc<Self>, threads: u32) {
-        if !self.models.installed("parakeet") { return; }
+        if !self.models.installed("parakeet") {
+            return;
+        }
         let engine = self.clone();
         let generation = lock(&self.warm_speech).generation;
-        let _ = thread::Builder::new().name("tuck-dictation-warmup".into()).spawn(move || {
-            let _operation = lock(&engine.operation);
-            if lock(&engine.session).is_some() { return; }
-            let threads = threads.clamp(1, 4);
-            {
-                let cache = lock(&engine.warm_speech);
-                if cache.generation != generation || cache.ready.as_ref().is_some_and(|(key, _)| *key == threads) { return; }
-            }
-            if let Ok(runtime) = SpeechRuntime::load(&engine.models, threads, false) {
-                lock(&engine.warm_speech).put(generation, threads, runtime);
-            }
-        });
+        let _ = thread::Builder::new()
+            .name("tuck-dictation-warmup".into())
+            .spawn(move || {
+                let _operation = lock(&engine.operation);
+                if lock(&engine.session).is_some() {
+                    return;
+                }
+                let threads = threads.clamp(1, 4);
+                {
+                    let cache = lock(&engine.warm_speech);
+                    if cache.generation != generation
+                        || cache.ready.as_ref().is_some_and(|(key, _)| *key == threads)
+                    {
+                        return;
+                    }
+                }
+                if let Ok(runtime) = SpeechRuntime::load(&engine.models, threads, false) {
+                    lock(&engine.warm_speech).put(generation, threads, runtime);
+                }
+            });
     }
-    pub fn clear_dictation_warmth(&self) { lock(&self.warm_speech).clear(); }
+    pub fn clear_dictation_warmth(&self) {
+        lock(&self.warm_speech).clear();
+    }
     fn stop_inner(&self) -> Result<f64> {
         let duration = {
             let mut state = lock(&self.context.state);
@@ -969,7 +996,7 @@ impl RecordingPort for CaptureEngine {
                 }
                 let mut pipeline = SpeechPipeline { runtime, segmenters, meeting: id, on_segment };
                 let _ = ready_tx.send(Ok(()));
-                let result = inference_loop(work_rx, &mut pipeline);
+                let result = inference_loop(&work_rx, &mut pipeline);
                 if result.is_ok() && !diarization {
                     pipeline.runtime.reset_session();
                     lock(&warm_speech).put(generation, key, pipeline.runtime);
@@ -1102,6 +1129,37 @@ impl RecordingPort for CaptureEngine {
         self.clear_dictation_warmth();
         self.models.install(kind)
     }
+    fn refine_files(
+        &self,
+        paths: &[(String, String)],
+        meeting: &str,
+        on_segment: OnSegment,
+        threads: u32,
+    ) -> Result<f64> {
+        let _operation = lock(&self.operation);
+        if lock(&self.session).is_some() {
+            return Err(error("Stop recording before refining saved audio."));
+        }
+        self.clear_dictation_warmth();
+        self.models.verify_offline_speakers()?;
+        let directory = meeting_audio_dir(&self.data_dir, meeting)?;
+        new_audio_dir(&directory)?;
+        let mut copies = Vec::new();
+        for (source, path) in paths {
+            if !matches!(source.as_str(), "microphone" | "system" | "import") {
+                return Err(error("Unknown saved audio source."));
+            }
+            let destination = directory.join(format!("{source}.wav"));
+            super::audio::copy_normalized(Path::new(path), &destination)?;
+            copies.push((source.clone(), destination));
+        }
+        let (duration, segments) =
+            super::refinement::refine(&self.models, &copies, meeting, threads)?;
+        for segment in segments {
+            on_segment(segment)?;
+        }
+        Ok(duration)
+    }
     fn import_file(
         &self,
         path: &str,
@@ -1215,9 +1273,15 @@ mod tests {
         cache.put(generation, 2, "verified engine".into());
         let (generation, first) = cache.take(2);
         assert_eq!(first.as_deref(), Some("verified engine"));
-        assert!(cache.take(2).1.is_none(), "a recognizer must have one owner");
+        assert!(
+            cache.take(2).1.is_none(),
+            "a recognizer must have one owner"
+        );
         cache.put(generation, 2, first.unwrap());
-        assert!(cache.take(4).1.is_none(), "thread changes must rebuild the engine");
+        assert!(
+            cache.take(4).1.is_none(),
+            "thread changes must rebuild the engine"
+        );
         cache.put(generation, 2, "old engine".into());
         cache.clear();
         cache.put(generation, 2, "late worker".into());
@@ -1239,7 +1303,10 @@ mod tests {
     #[test]
     #[ignore = "requires explicitly provisioned local speech weights; does not open the microphone"]
     fn benchmark_dictation_model_startup() {
-        let data = PathBuf::from(std::env::var_os("TUCK_BENCH_DATA").expect("Set TUCK_BENCH_DATA to an existing model installation"));
+        let data = PathBuf::from(
+            std::env::var_os("TUCK_BENCH_DATA")
+                .expect("Set TUCK_BENCH_DATA to an existing model installation"),
+        );
         let engine = CaptureEngine::new(data, PathBuf::new(), Arc::new(|_, _| {}));
         let cold = Instant::now();
         let runtime = SpeechRuntime::load(&engine.models, 2, false).unwrap();
@@ -1304,7 +1371,7 @@ mod tests {
             seen: vec![],
             flushed: false,
         };
-        inference_loop(rx, &mut fake).unwrap();
+        inference_loop(&rx, &mut fake).unwrap();
         assert_eq!(fake.seen, vec![0.0, 1.0, 2.0]);
         assert!(fake.flushed);
     }
@@ -1327,7 +1394,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(
-            inference_loop(rx, &mut Fake).unwrap_err().message,
+            inference_loop(&rx, &mut Fake).unwrap_err().message,
             "persistence failed"
         );
     }
@@ -1610,8 +1677,14 @@ impl CaptureEngine {
         let (mic_present, system_present) = if system_audio {
             let devices = capture_devices()?;
             (
-                devices["microphones"].as_array().is_some_and(|v| v.iter().any(|d| selected.microphone.is_empty() || d["id"] == selected.microphone)),
-                devices["systemOutputs"].as_array().is_some_and(|v| v.iter().any(|d| selected.system.is_empty() || d["id"] == selected.system)),
+                devices["microphones"].as_array().is_some_and(|v| {
+                    v.iter()
+                        .any(|d| selected.microphone.is_empty() || d["id"] == selected.microphone)
+                }),
+                devices["systemOutputs"].as_array().is_some_and(|v| {
+                    v.iter()
+                        .any(|d| selected.system.is_empty() || d["id"] == selected.system)
+                }),
             )
         } else {
             // A shortcut needs identity/existence, not every device's display name.
@@ -1619,14 +1692,21 @@ impl CaptureEngine {
             let present = if selected.microphone.is_empty() {
                 host.default_input_device().is_some()
             } else {
-                host.input_devices().map_err(|_| error("Microphones could not be listed."))?
-                    .any(|device| device.id().is_ok_and(|id| id.to_string() == selected.microphone))
+                host.input_devices()
+                    .map_err(|_| error("Microphones could not be listed."))?
+                    .any(|device| {
+                        device
+                            .id()
+                            .is_ok_and(|id| id.to_string() == selected.microphone)
+                    })
             };
             (present, false)
         };
         let model_ready = self.models.installed("parakeet");
         let helper_ready = !cfg!(target_os = "macos")
-            || ((!system_audio || (helper_path("tuck-calendar", "TUCK_CALENDAR_HELPER").is_ok() && helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok()))
+            || ((!system_audio
+                || (helper_path("tuck-calendar", "TUCK_CALENDAR_HELPER").is_ok()
+                    && helper_path("tuck-audio", "TUCK_AUDIO_HELPER").is_ok()))
                 && (!self.models.apple_installed()
                     || helper_path("tuck-speech", "TUCK_SPEECH_HELPER").is_ok()));
         let mut issues = vec![];

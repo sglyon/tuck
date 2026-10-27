@@ -142,7 +142,7 @@ export default function Settings({
         `${kind === "openai" ? "OpenAI key" : "Notion token"} saved in your system credential store.`,
       );
     });
-  const install = (kind: "parakeet" | "speakers") =>
+  const install = (kind: "parakeet" | "speakers" | "speakers-offline") =>
     run(kind, async () => {
       await call("install_model", { kind });
       await onStatus();
@@ -251,7 +251,7 @@ export default function Settings({
                   Run an Ollama model locally. Smaller models use less memory;
                   transcription does not need an LLM running.
                 </p>
-                <details className="advanced-settings">
+                            <details className="advanced-settings">
                   <summary>Advanced connection settings</summary>
                   <label className="field-label" htmlFor="ollama-url">
                     Ollama address
@@ -667,6 +667,36 @@ export default function Settings({
                     <Download size={15} />
                     Set up
                   </>
+                )}
+              </button>
+            </div>
+            <div className="model-row">
+              <div className="model-glyph muted-glyph">
+                <Mic size={22} />
+              </div>
+              <div>
+                <h3>
+                  Meeting refinement <span className="small-tag">OPTIONAL</span>
+                </h3>
+                <p>
+                  Rebuild saved transcripts with more consistent speakers and
+                  less duplicated audio.
+                </p>
+                <small>
+                  Apple silicon · 22 MB download. Runs entirely on this Mac.
+                </small>
+              </div>
+              <button
+                className="button secondary compact"
+                disabled={!!busy || status.offlineSpeakerModelInstalled}
+                onClick={() => void install("speakers-offline")}
+              >
+                {status.offlineSpeakerModelInstalled ? (
+                  <><Check size={15} />Installed</>
+                ) : pending("speakers-offline") ? (
+                  <LoaderCircle size={15} className="spin" />
+                ) : (
+                  <><Download size={15} />Set up</>
                 )}
               </button>
             </div>

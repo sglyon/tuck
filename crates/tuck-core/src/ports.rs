@@ -29,6 +29,18 @@ pub trait RecordingPort: Send + Sync {
     fn shutdown(&self) -> Result<()>;
     fn install_model(&self, kind: &str) -> Result<Value>;
     fn unload(&self) -> Result<()>;
+    /// Reprocess retained tracks into a new meeting, leaving source evidence intact.
+    fn refine_files(
+        &self,
+        _paths: &[(String, String)],
+        _meeting_id: &str,
+        _on_segment: OnSegment,
+        _threads: u32,
+    ) -> Result<f64> {
+        Err(AppError::unavailable(
+            "Meeting refinement is unavailable on this host.",
+        ))
+    }
     fn import_file(
         &self,
         path: &str,
@@ -39,8 +51,15 @@ pub trait RecordingPort: Send + Sync {
 }
 pub trait IntelligencePort: Send + Sync {
     /// Short, tool-free formatting request. Implementations must bound latency.
-    fn complete_dictation(&self, _settings: &Value, _system: &str, _messages: &[Value]) -> Result<String> {
-        Err(AppError::unavailable("Dictation cleanup is unavailable with this AI provider."))
+    fn complete_dictation(
+        &self,
+        _settings: &Value,
+        _system: &str,
+        _messages: &[Value],
+    ) -> Result<String> {
+        Err(AppError::unavailable(
+            "Dictation cleanup is unavailable with this AI provider.",
+        ))
     }
 
     /// Background-only completion. Adapters must cap context/output/latency and disable tools.

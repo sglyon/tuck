@@ -91,6 +91,12 @@ pub struct AppleFile {
 pub fn apple_manifest() -> Result<AppleManifest> {
     serde_json::from_str(include_str!("../../../native/apple-speech/models.json")).map_err(io_error)
 }
+pub fn diarization_manifest() -> Result<AppleManifest> {
+    serde_json::from_str(include_str!(
+        "../../../native/apple-speech/diarization-models.json"
+    ))
+    .map_err(io_error)
+}
 pub enum BackendModels {
     Cpu(PathBuf),
     Apple(PathBuf),
@@ -112,6 +118,26 @@ impl ModelManager {
             progress: Mutex::new(0.0),
             install_lock: Mutex::new(()),
         })
+    }
+    pub fn diarization_dir(&self) -> PathBuf {
+        self.root.join("diarization-coreml")
+    }
+    pub fn offline_speakers_installed(&self) -> bool {
+        diarization_manifest().is_ok_and(|m| {
+            m.files.iter().all(|f| {
+                fs::metadata(self.diarization_dir().join(&f.path))
+                    .is_ok_and(|s| s.is_file() && s.len() == f.bytes)
+            })
+        })
+    }
+    pub fn verify_offline_speakers(&self) -> Result<()> {
+        if !self.offline_speakers_installed() {
+            return Err(error("Set up meeting refinement in Settings first."));
+        }
+        for f in diarization_manifest()?.files {
+            verify_file(&self.diarization_dir().join(f.path), &f.sha256)?;
+        }
+        Ok(())
     }
     pub fn cpu_dir(&self) -> PathBuf {
         self.root.join("parakeet-v3-int8")
@@ -153,7 +179,7 @@ impl ModelManager {
                         .all(|(name, _)| regular(&self.cpu_dir().join(name)))))
     }
     pub fn status(&self) -> Value {
-        json!({"modelInstalled":self.installed("parakeet"),"speakerModelInstalled":self.installed("speakers"),"modelDownloading":self.downloading.load(Ordering::Acquire),"modelProgress":*self.progress.lock().unwrap_or_else(|p|p.into_inner()),"speechBackend":if self.apple_installed(){"coreml"}else{"cpu"}})
+        json!({"offlineSpeakerModelInstalled":self.offline_speakers_installed(),"modelInstalled":self.installed("parakeet"),"speakerModelInstalled":self.installed("speakers"),"modelDownloading":self.downloading.load(Ordering::Acquire),"modelProgress":*self.progress.lock().unwrap_or_else(|p|p.into_inner()),"speechBackend":if self.apple_installed(){"coreml"}else{"cpu"}})
     }
     pub fn verify_vad(&self) -> Result<()> {
         verify_file(&self.vad_path(), VAD_HASH)
@@ -244,7 +270,10 @@ impl ModelManager {
         file.sync_all().map_err(io_error)
     }
     pub fn install(&self, kind: &str) -> Result<Value> {
-        if !matches!(kind, "parakeet" | "speakers" | "parakeet-cpu") {
+        if !matches!(
+            kind,
+            "parakeet" | "speakers" | "parakeet-cpu" | "speakers-offline"
+        ) {
             return Err(error("Choose Parakeet or speaker recognition."));
         }
         let _guard = self
@@ -280,7 +309,37 @@ impl ModelManager {
             .timeout(Duration::from_secs(900))
             .build()
             .map_err(io_error)?;
-        if kind == "speakers" {
+        if kind == "speakers-offline" {
+            if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+                return Err(error(
+                    "Meeting refinement currently requires Apple silicon.",
+                ));
+            }
+            let manifest = diarization_manifest()?;
+            let model = stage.path().join("model");
+            fs::create_dir(&model).map_err(io_error)?;
+            let mut received = 0;
+            for file in &manifest.files {
+                safe_relative(&file.path)?;
+                let target = model.join(&file.path);
+                fs::create_dir_all(target.parent().unwrap()).map_err(io_error)?;
+                self.download(
+                    &client,
+                    &format!(
+                        "https://huggingface.co/{}/resolve/{}/{}",
+                        manifest.repo, manifest.revision, file.path
+                    ),
+                    &target,
+                    &file.sha256,
+                    file.bytes,
+                    kind,
+                    received as f64 / manifest.total_bytes as f64,
+                    (received + file.bytes) as f64 / manifest.total_bytes as f64,
+                )?;
+                received += file.bytes;
+            }
+            replace_directory(&model, &self.diarization_dir(), false)?;
+        } else if kind == "speakers" {
             let path = stage.path().join(SPEAKER_FILE);
             self.download(
                 &client,

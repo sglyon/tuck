@@ -205,6 +205,7 @@ export function RetainedAudio({
   const [audioId, setAudioId] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [error, setError] = useState("");
   const [position, setPosition] = useState<number | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -270,24 +271,26 @@ export function RetainedAudio({
       if (generation === request.current) setBusy(false);
     }
   };
-  const recover = async () => {
+  const recover = async (refine = false) => {
+    setRefining(refine);
     setBusy(true);
     setError("");
     try {
       if (!(await beforeOperation())) return;
-      const recovered = await call<Meeting>("recover_audio", {
+      const recovered = await call<Meeting>(refine ? "refine_audio" : "recover_audio", {
         meetingId: meeting.id,
         audioId,
       });
       merge(recovered);
       onRecovered(recovered);
       notify(
-        "Saved audio recovered into a separate meeting. The original is unchanged.",
+        refine ? "Refined transcript saved as a separate meeting." : "Saved audio recovered into a separate meeting. The original is unchanged.",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setRefining(false);
     }
   };
   return (
@@ -309,8 +312,9 @@ export function RetainedAudio({
         ) : (
           <>
             <p className="quiet-note">
-              Listen to a retained recording or recover it into a separate
-              transcript. Playback stays on this device.
+              Listen to saved audio or create a separate transcript. Refinement
+              combines all saved tracks to reduce echoes and improve speaker
+              grouping. Audio stays on this Mac.
             </p>
             {files?.some((file) => file.id === "import.wav") && (
               <p className="quiet-note">
@@ -322,7 +326,7 @@ export function RetainedAudio({
             {busy && (
               <p className="quiet-note" role="status">
                 <LoaderCircle className="spin" size={13} />
-                {files ? "Working with saved audio…" : "Checking saved audio…"}
+                {refining ? "Refining transcript and speakers…" : files ? "Working with saved audio…" : "Checking saved audio…"}
               </p>
             )}
             {files?.length === 0 && (
@@ -358,6 +362,9 @@ export function RetainedAudio({
                   </select>
                 </label>
                 <div className="saved-audio-actions">
+                  <button className="button secondary compact" disabled={busy || meeting.isExample} onClick={() => void recover(true)}>
+                    <RotateCcw size={14} />Refine transcript
+                  </button>
                   <button
                     className="button secondary compact"
                     disabled={busy || !audioId}

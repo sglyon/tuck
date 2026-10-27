@@ -14,6 +14,11 @@ name = "tuck-runtime"
 path = "src/bin/tuck-runtime.rs"
 required-features = ["diagnostics"]
 
+[[bin]]
+name = "tuck-audio-eval"
+path = "src/bin/tuck-audio-eval.rs"
+required-features = ["diagnostics"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

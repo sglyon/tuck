@@ -292,7 +292,7 @@ impl MeetingService {
             Ok(json!(self.adapters.archive.list(id)?))
         }
     }
-    pub(super) fn recover_audio(self: &Arc<Self>, p: &Value) -> Result<Value> {
+    pub(super) fn recover_audio(self: &Arc<Self>, p: &Value, refine: bool) -> Result<Value> {
         let id = string(p, "meetingId")?;
         let _op = self.operation(id, "recovery")?;
         let original = self.audio_meeting(id)?;
@@ -301,13 +301,41 @@ impl MeetingService {
                 "Example meetings have no retained audio to recover.",
             ));
         }
-        let path = self.adapters.archive.resolve(id, string(p, "audioId")?)?;
-        self.import_audio_with_source(
-            &path,
-            &truncate(&format!("Recovered · {}", original.title), 240),
-            Some(&original),
-        )
+        if refine {
+            let mut paths = Vec::new();
+            for file in self.adapters.archive.list(id)? {
+                let audio_id = string(&file, "id")?;
+                let source = match audio_id {
+                    "microphone.wav" => "microphone",
+                    "system.wav" => "system",
+                    "import.wav" => "import",
+                    _ => continue,
+                };
+                paths.push((
+                    source.to_owned(),
+                    self.adapters.archive.resolve(id, audio_id)?,
+                ));
+            }
+            if paths.is_empty() {
+                return Err(AppError::invalid("No saved audio is available to refine."));
+            }
+            self.import_audio_with_source(
+                "",
+                &truncate(&format!("Refined · {}", original.title), 240),
+                Some(&original),
+                Some(&paths),
+            )
+        } else {
+            let path = self.adapters.archive.resolve(id, string(p, "audioId")?)?;
+            self.import_audio_with_source(
+                &path,
+                &truncate(&format!("Recovered · {}", original.title), 240),
+                Some(&original),
+                None,
+            )
+        }
     }
+
     pub(super) fn backup_library(&self, p: &Value) -> Result<Value> {
         let _life = lock(&self.lifecycle)?;
         self.assert_idle()?;

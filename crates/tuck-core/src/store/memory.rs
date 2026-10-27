@@ -236,6 +236,8 @@ impl Repository for Data {
         if !speakers.iter().any(|v| v["id"] == s.speaker_id) {
             let name = if s.speaker_id == "you" {
                 "You".into()
+            } else if s.speaker_id == "unassigned" {
+                "Unassigned".into()
             } else {
                 format!(
                     "Speaker {}",
