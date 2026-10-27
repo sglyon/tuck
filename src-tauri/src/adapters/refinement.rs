@@ -219,6 +219,120 @@ fn alignment(a: &[Word], b: &[Word]) -> Vec<(usize, usize)> {
     result.reverse();
     result
 }
+// Accept a small spelling discrepancy only inside a strongly aligned echo.
+// Protect negations, common speaker/ownership pronouns, and numeric contrasts.
+fn echo_variant(a: &str, b: &str) -> bool {
+    let a = normalize(a);
+    let b = normalize(b);
+    if a == b {
+        return !a.is_empty();
+    }
+    let protected = [
+        "no", "not", "never", "cannot", "cant", "wont", "dont", "didnt", "isnt", "arent",
+        "shouldnt", "wouldnt", "couldnt", "mustnt", "wasnt", "werent", "we", "you", "he", "she",
+        "they", "my", "our", "your", "his", "her", "their",
+    ];
+    if protected.contains(&a.as_str())
+        || protected.contains(&b.as_str())
+        || !a.chars().all(char::is_alphabetic)
+        || !b.chars().all(char::is_alphabetic)
+    {
+        return false;
+    }
+    let (a, b) = (a.chars().collect::<Vec<_>>(), b.chars().collect::<Vec<_>>());
+    if a.len().max(b.len()) < 3 || a.len().abs_diff(b.len()) > 1 {
+        return false;
+    }
+    if a.len() == b.len() {
+        return a.iter().zip(&b).filter(|(a, b)| a != b).count() == 1;
+    }
+    let (short, long) = if a.len() < b.len() {
+        (&a, &b)
+    } else {
+        (&b, &a)
+    };
+    (0..long.len()).any(|skip| {
+        short.iter().eq(long
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| (i != skip).then_some(c)))
+    })
+}
+fn suppress_unidentified_echo(
+    utterance: &[Word],
+    nearby: &[Word],
+    matches: &[(usize, usize)],
+    suppress: &mut [bool],
+) {
+    let mut run: Vec<(usize, usize)> = vec![];
+    let apply = |run: &[(usize, usize)], suppress: &mut [bool]| {
+        if run.len() < 3
+            || run
+                .iter()
+                .filter(|&&(a, _)| normalize(&utterance[a].text).len() >= 4)
+                .count()
+                < 2
+        {
+            return;
+        }
+        let offsets = run
+            .iter()
+            .map(|&(a, b)| utterance[a].start - nearby[b].start)
+            .collect::<Vec<_>>();
+        let low = offsets.iter().copied().fold(f64::INFINITY, f64::min);
+        let high = offsets.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        if high - low > 0.2 {
+            return;
+        }
+        for &(a, b) in run {
+            suppress[a] = true;
+            // Only adjacent, time-aligned small spelling variants can extend a run.
+            // Unmatched interjections and unique boundaries stay in the transcript.
+            for direction in [-1isize, 1] {
+                for step in 1..=2 {
+                    let Some(i) = a.checked_add_signed(direction * step) else {
+                        break;
+                    };
+                    let Some(j) = b.checked_add_signed(direction * step) else {
+                        break;
+                    };
+                    let (Some(mic), Some(sys)) = (utterance.get(i), nearby.get(j)) else {
+                        break;
+                    };
+                    let offset = mic.start - sys.start;
+                    if mic.speaker_id != "unassigned"
+                        || sys.speaker_id != nearby[b].speaker_id
+                        || offset.abs() >= 0.25
+                        || offset < low - 0.1
+                        || offset > high + 0.1
+                        || !echo_variant(&mic.text, &sys.text)
+                    {
+                        break;
+                    }
+                    suppress[i] = true;
+                }
+            }
+        }
+    };
+    for &(a, b) in matches {
+        let eligible = utterance[a].speaker_id == "unassigned"
+            && (utterance[a].start - nearby[b].start).abs() < 0.25;
+        let contiguous = run.last().is_none_or(|&(x, y)| {
+            a - x <= 2
+                && b - y <= 2
+                && nearby[b].speaker_id == nearby[y].speaker_id
+                && utterance[a].start - utterance[x].end < 1.0
+        });
+        if !eligible || !contiguous {
+            apply(&run, suppress);
+            run.clear();
+        }
+        if eligible {
+            run.push((a, b));
+        }
+    }
+    apply(&run, suppress);
+}
 fn fuse(system: Vec<Word>, microphone: Vec<Vec<Word>>, other: Vec<Word>) -> Vec<Word> {
     let mut votes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut decisions = Vec::new();
@@ -326,6 +440,8 @@ fn fuse(system: Vec<Word>, microphone: Vec<Vec<Word>>, other: Vec<Word>) -> Vec<
             }
             suppress_run(&run, &mut suppress);
         }
+        // Echo detection does not require inventing an identity for an unknown mic voice.
+        suppress_unidentified_echo(&utterance, &nearby, &matches, &mut suppress);
         for (index, mut word) in utterance.into_iter().enumerate() {
             if suppress[index] {
                 continue;
@@ -614,6 +730,48 @@ mod tests {
             source: source.into(),
             speaker_id: speaker.into(),
         }
+    }
+    #[test]
+    #[ignore = "explicit private saved-transcript refinement replay with local models"]
+    fn evaluate_saved_transcript_refinement() {
+        use std::{fs, io::Write, sync::Arc};
+        let env_path = |name| PathBuf::from(std::env::var_os(name).expect(name));
+        let case = env_path("TUCK_DELAYED_CASE");
+        let data = env_path("TUCK_DELAYED_MODELS");
+        let saved: Value =
+            serde_json::from_slice(&fs::read(env_path("TUCK_DELAYED_RAW")).unwrap()).unwrap();
+        let stage = tempfile::tempdir_in(&case).unwrap();
+        if let Some(path) = std::env::var_os("TUCK_REFINEMENT_VOICES") {
+            fs::copy(path, stage.path().join("voice-memory.json")).unwrap();
+        }
+        let memory = super::super::voice_memory::VoiceMemory::new(stage.path());
+        let models = ModelManager::new(&data, Arc::new(|_, _| {}));
+        models.verify_offline_speakers().unwrap();
+        let paths = ["system", "microphone"]
+            .into_iter()
+            .map(|source| (source.to_owned(), case.join(format!("{source}.wav"))))
+            .collect::<Vec<_>>();
+        let started = std::time::Instant::now();
+        let (duration, segments) = refine_transcript(
+            &models,
+            &paths,
+            "evaluation",
+            Some(&memory),
+            saved["duration"].as_f64().unwrap(),
+            saved["rawSegments"].as_array().unwrap(),
+        )
+        .unwrap();
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut output = options.open(env_path("TUCK_DELAYED_OUTPUT")).unwrap();
+        serde_json::to_writer(&mut output, &json!({"duration":duration,"elapsedSeconds":started.elapsed().as_secs_f64(),"segments":segments})).unwrap();
+        output.write_all(b"\n").unwrap();
+        output.sync_all().unwrap();
     }
     #[test]
     #[ignore = "explicit local saved-audio replay; requires installed Apple models and private case paths"]
@@ -931,6 +1089,47 @@ mod tests {
             output.iter().any(|w| w.text == "copy"),
             "unique trailing speech must survive"
         );
+    }
+    #[test]
+    fn unidentified_partial_echo_with_spelling_variants_stays_one_turn() {
+        let system = ["built", "an", "efficient", "cloud", "service"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2, "system", "voice-known"))
+            .collect();
+        let mic = ["build", "and", "efficient", "cloud", "service"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2 + 0.064, "microphone", "unassigned"))
+            .collect();
+        let output = segments(fuse(system, vec![mic], vec![]), "test");
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0]["text"], "built an efficient cloud service");
+        assert_eq!(output[0]["speakerId"], "voice-known");
+    }
+    #[test]
+    fn unidentified_echo_does_not_erase_unique_interjections_or_negation() {
+        let system = ["we", "can", "build", "efficient", "cloud", "services"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2, "system", "voice-known"))
+            .collect();
+        let mut mic = ["we", "cant", "build", "efficient", "cloud", "services"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2 + 0.064, "microphone", "unassigned"))
+            .collect::<Vec<_>>();
+        mic.insert(4, word("Wait!", 0.75, "microphone", "unassigned"));
+        mic.push(word("tomorrow", 1.4, "microphone", "unassigned"));
+        let output = fuse(system, vec![mic], vec![]);
+        for text in ["cant", "Wait!", "tomorrow"] {
+            assert!(output.iter().any(|w| w.text == text));
+        }
+        assert!(output
+            .iter()
+            .filter(|w| w.source == "microphone")
+            .all(|w| w.speaker_id == "unassigned"));
+        assert!(!echo_variant("25", "26"));
     }
     #[test]
     fn different_voice_inside_echoing_utterance_is_preserved() {

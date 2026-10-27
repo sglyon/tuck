@@ -160,3 +160,20 @@ persistent templates in its supplied data directory. Without that flag it never
 writes voice memory. The ignored native test `evaluate_delayed_saved_recordings`
 replays context checkpoints using only profiles learned from a separate earlier
 recording; its `TUCK_DELAYED_*` paths must point to private evaluation directories.
+
+
+Unidentified microphone words do not block echo suppression. A partial echo with
+at least three exact, tightly timed anchors (including two substantive words)
+can suppress duplicate microphone words without selecting a speaker identity.
+Adjacent single-character ASR variants are considered only within that aligned
+context. Unique interjections, unmatched boundaries, protected negation/pronoun contrasts,
+and differing numeric values are retained. This prevents an unidentified echo
+from alternating word-by-word with a named system speaker. It does not correct
+the canonical track's recognition errors.
+
+For a local replay with existing word timings, the ignored native test
+`evaluate_saved_transcript_refinement` reads `TUCK_DELAYED_CASE`,
+`TUCK_DELAYED_MODELS`, `TUCK_DELAYED_RAW` and a new `TUCK_DELAYED_OUTPUT`.
+Optional `TUCK_REFINEMENT_VOICES` points to a voice-memory file copied into an
+isolated temporary directory; the original is never modified. Audio, cached
+transcripts, named profiles and replay output belong outside the repository.
