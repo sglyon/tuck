@@ -1,0 +1,12 @@
+[project]
+name = "tuck-evals"
+version = "0.1.0"
+description = "Local DeepEval datasets and omp-based evaluations for Tuck"
+requires-python = ">=3.12,<3.14"
+dependencies = ["deepeval>=4.3.2,<5", "pytest>=9,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false

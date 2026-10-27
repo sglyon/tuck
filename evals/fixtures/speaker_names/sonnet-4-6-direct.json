@@ -1,0 +1,205 @@
+{
+  "cases": [
+    {
+      "id": "c01",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Sarah",
+          "strength": "tentative",
+          "evidenceSegmentIds": [
+            "s1",
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c02",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Sarah",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c03",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Sarah",
+          "strength": "supported",
+          "evidenceSegmentIds": [
+            "s1",
+            "s2",
+            "s4",
+            "s5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c04",
+      "suggestions": []
+    },
+    {
+      "id": "c05",
+      "suggestions": []
+    },
+    {
+      "id": "c06",
+      "suggestions": []
+    },
+    {
+      "id": "c07",
+      "suggestions": []
+    },
+    {
+      "id": "c08",
+      "suggestions": []
+    },
+    {
+      "id": "c09",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Maya",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c10",
+      "suggestions": []
+    },
+    {
+      "id": "c11",
+      "suggestions": [
+        {
+          "speakerId": "A",
+          "name": "Alex",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s1"
+          ]
+        },
+        {
+          "speakerId": "B",
+          "name": "Alex",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c12",
+      "suggestions": []
+    },
+    {
+      "id": "c13",
+      "suggestions": []
+    },
+    {
+      "id": "c14",
+      "suggestions": []
+    },
+    {
+      "id": "c15",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Sarah",
+          "strength": "tentative",
+          "evidenceSegmentIds": [
+            "s1",
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c16",
+      "suggestions": []
+    },
+    {
+      "id": "c17",
+      "suggestions": []
+    },
+    {
+      "id": "c18",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Rob",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c19",
+      "suggestions": [
+        {
+          "speakerId": "B",
+          "name": "Sal",
+          "strength": "explicit",
+          "evidenceSegmentIds": [
+            "s2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c20",
+      "suggestions": []
+    },
+    {
+      "id": "c21",
+      "suggestions": []
+    },
+    {
+      "id": "c22",
+      "suggestions": []
+    },
+    {
+      "id": "c23",
+      "suggestions": [
+        {
+          "speakerId": "C",
+          "name": "Sarah",
+          "strength": "tentative",
+          "evidenceSegmentIds": [
+            "s1",
+            "s3",
+            "s4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c24",
+      "suggestions": []
+    }
+  ],
+  "provenance": {
+    "model": "anthropic/claude-sonnet-4-6",
+    "inference": "omp",
+    "recordedAt": "2026-10-27",
+    "executionMode": "batched",
+    "strategy": "direct",
+    "syntheticOnly": true,
+    "promptSha256": "84ed05951ec7a24166658e9b8bcb6a8f6b5253d7acd30f70d20221ac81564e95"
+  }
+}
