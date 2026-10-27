@@ -16,6 +16,7 @@ pub mod playback;
 pub mod refinement;
 pub mod secrets;
 pub mod speech;
+pub(crate) mod short_speech;
 pub mod voice_memory;
 pub mod live_speakers;
 

@@ -708,6 +708,7 @@ pub(crate) fn refine_transcript(
     }
     let mut output = segments(fuse(system, microphone, other), meeting);
     if let Some(memory) = memory {
+        super::short_speech::recover(models, paths, &analyses, memory, &mut output);
         let names = memory.names()?;
         for segment in &mut output {
             if let Some(n) = names.iter().find(|n| n["id"] == segment["speakerId"]) {

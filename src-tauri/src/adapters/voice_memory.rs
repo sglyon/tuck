@@ -11,6 +11,9 @@ use tuck_core::{ports::Result, AppError};
 const MATCH: f32 = 0.85;
 const MARGIN: f32 = 0.15;
 const MIN_ENROLL_SECONDS: f64 = 15.;
+const SHORT_MATCH: f32 = 0.45;
+const SHORT_SUPPORT: f32 = 0.40;
+const SHORT_MARGIN: f32 = 0.25;
 #[derive(Clone, Serialize, Deserialize)]
 struct Profile {
     id: String,
@@ -68,6 +71,39 @@ impl VoiceMatcher {
             .filter_map(|p| cosine(&p.embedding, embedding))
             .fold(-1., f32::max);
         score >= 0.70 && score - runner >= MARGIN
+    }
+    // A separate, duration-limited final-pass policy. It does not relax the
+    // whole-profile gate or learn from short queries. Both boundary probes must
+    // agree, including a wide separation from every stored competing voice.
+    pub fn identify_short(&self, probes: &[Vec<f32>]) -> Option<String> {
+        self.short_consensus(probes, SHORT_MATCH)
+    }
+    pub fn supports_short(&self, id: &str, probes: &[Vec<f32>]) -> bool {
+        self.short_consensus(probes, SHORT_SUPPORT).as_deref() == Some(id)
+    }
+    fn short_consensus(&self, probes: &[Vec<f32>], floor: f32) -> Option<String> {
+        if probes.len() != 2 || self.profiles.len() < 2 {
+            return None;
+        }
+        let mut identity: Option<String> = None;
+        for probe in probes {
+            let mut scores = self
+                .profiles
+                .iter()
+                .filter_map(|p| cosine(&p.embedding, probe).map(|s| (s, p)))
+                .collect::<Vec<_>>();
+            scores.sort_by(|a, b| b.0.total_cmp(&a.0));
+            let (score, profile) = scores.first()?;
+            let runner = scores.get(1).map(|s| s.0).unwrap_or(-1.);
+            if *score < floor
+                || score - runner < SHORT_MARGIN
+                || identity.as_ref().is_some_and(|id| id != &profile.id)
+            {
+                return None;
+            }
+            identity = Some(profile.id.clone());
+        }
+        identity
     }
     pub fn names(&self) -> Vec<Value> {
         self.profiles
@@ -233,6 +269,57 @@ mod tests {
         );
         assert!(reopened.identify(&vector(1)).unwrap().is_none());
         assert!(reopened.enroll_or_match(&vector(1), 1.).unwrap().is_none());
+    }
+    #[test]
+    fn short_queries_require_two_separated_consistent_probes_without_relaxing_profile_match() {
+        let a = Profile {
+            id: "a".into(),
+            name: "A".into(),
+            color: 0,
+            embedding: vector(0),
+        };
+        let b = Profile {
+            id: "b".into(),
+            name: "B".into(),
+            color: 1,
+            embedding: vector(1),
+        };
+        let matcher = VoiceMatcher {
+            profiles: vec![a, b.clone()],
+        };
+        let probe = |x: f32, y: f32| {
+            let mut v = vector(2);
+            v[0] = x;
+            v[1] = y;
+            v[2] = (1. - x * x - y * y).sqrt();
+            v
+        };
+        let queries = vec![probe(0.48, 0.1), probe(0.49, 0.1)];
+        assert_eq!(matcher.identify_short(&queries).as_deref(), Some("a"));
+        assert!(
+            matcher.identify(&queries[0]).is_none(),
+            "long-profile threshold stays strict"
+        );
+        assert!(matcher.identify_short(&queries[..1]).is_none());
+        assert!(matcher
+            .identify_short(&[probe(0.48, 0.4), probe(0.49, 0.4)])
+            .is_none());
+        assert!(matcher
+            .identify_short(&[queries[0].clone(), probe(0.1, 0.49)])
+            .is_none());
+        assert!(
+            VoiceMatcher { profiles: vec![b] }
+                .identify_short(&queries)
+                .is_none(),
+            "missing true voice must abstain"
+        );
+        let support = vec![probe(0.42, 0.1), probe(0.43, 0.1)];
+        assert!(matcher.identify_short(&support).is_none());
+        assert!(matcher.supports_short("a", &support));
+        assert!(!matcher.supports_short("b", &support));
+        assert!(matcher
+            .identify_short(&[vec![f32::NAN; 256], queries[0].clone()])
+            .is_none());
     }
     #[test]
     fn ambiguous_profiles_and_invalid_vectors_are_rejected() {

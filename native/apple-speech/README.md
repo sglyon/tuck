@@ -177,3 +177,31 @@ For a local replay with existing word timings, the ignored native test
 Optional `TUCK_REFINEMENT_VOICES` points to a voice-memory file copied into an
 isolated temporary directory; the original is never modified. Audio, cached
 transcripts, named profiles and replay output belong outside the repository.
+
+
+## Brief-reply identity recovery
+
+After the full saved-recording pass, an optional local pass revisits unidentified
+system/combined paragraphs lasting 0.5–1.5 seconds (at most eight words, 64
+paragraphs per meeting). It embeds exact audio at two slightly different
+boundaries, tiling each span to fill the embedding model window. Padding cannot
+borrow a recognized neighboring turn. Coarse ten-second chunk bounding boxes
+are not evidence that a speaker spoke inside every gap in that interval.
+
+Both system probes must select the same stored identity with cosine at least
+0.45 and a 0.25 lead over every competing stored profile; that identity must also
+be established by the full-meeting pass. At least two profiles are required.
+Combined paragraphs additionally require both microphone probes to corroborate
+that identity (0.40 minimum, same margin). Microphone-only passages and longer,
+shorter, overlapping, ambiguous or failing probes stay unidentified. These
+short-query thresholds were developed with one locally recorded meeting,
+known-voice controls, profile-withholding negatives and a user-confirmed brief
+reply. They are not probabilities or a general accuracy guarantee.
+
+Whole-profile matching remains 0.85/0.15; live identification is unchanged.
+The short pass never enrolls voices, updates templates, changes words, or
+changes existing speaker assignments. It runs only during final refinement.
+Native helper `--embed-spans MODEL_DIR WAV SOURCE` reads a bounded JSON array
+of `{id,start,end}` from stdin and emits `TUCK_SPAN_EMBEDDINGS`. Rust enforces
+output limits and a 45-second deadline per source. A failure leaves the existing
+unidentified speech intact. Vectors stay in local process memory.
