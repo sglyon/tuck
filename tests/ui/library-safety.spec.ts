@@ -343,6 +343,14 @@ test("retained audio loads only on request, never autoplays, seeks on intent and
     .poll(() => audio.evaluate((el: any) => el.currentTime))
     .toBe(meeting.segments[1].start);
   expect(await audio.evaluate((el: any) => el.paused)).toBe(true);
+  const timeline = page.getByRole("region", { name: "Speaker timeline", exact: true });
+  await timeline.getByRole("button", { name: "Explore Maya Chen's speech" }).focus();
+  await page.keyboard.press("Home");
+  await expect.poll(() => audio.evaluate((el: any) => el.currentTime)).toBe(meeting.segments[1].start);
+  await expect(timeline.locator(".timeline-position")).toHaveText("00:16 / 03:35");
+  expect(await audio.evaluate((el: any) => el.paused)).toBe(true);
+  await audio.evaluate((el: HTMLAudioElement) => { el.currentTime = 8; });
+  await expect(timeline.locator(".timeline-position")).toHaveText("00:08 / 03:35");
   await page
     .getByRole("button", { name: "Recover saved audio", exact: true })
     .last()

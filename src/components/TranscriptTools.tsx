@@ -174,11 +174,13 @@ export function RetainedAudio({
   beforeOperation,
   onRecovered,
   onSeekReady,
+  onPositionChange,
   openRequested = false,
 }: Shared & {
   beforeOperation: () => Promise<boolean>;
   onRecovered: (m: Meeting) => void;
   onSeekReady: (seek: ((seconds: number) => void) | null) => void;
+  onPositionChange?: (meetingId: string, seconds: number | null) => void;
   openRequested?: boolean;
 }) {
   const [open, setOpen] = useState(openRequested);
@@ -195,6 +197,9 @@ export function RetainedAudio({
   const inactive = !["recording", "paused", "processing"].includes(
     meeting.status,
   );
+  useEffect(() => {
+    if (!open || !url) onPositionChange?.(meeting.id, null);
+  }, [open, url, meeting.id, onPositionChange]);
   useEffect(() => {
     if (openRequested) setOpen(true);
   }, [openRequested]);
@@ -376,6 +381,7 @@ export function RetainedAudio({
                       preload="metadata"
                       src={url}
                       aria-label="Retained meeting audio"
+                      onTimeUpdate={(event) => onPositionChange?.(meeting.id, event.currentTarget.currentTime)}
                       onLoadedMetadata={() => {
                         if (audio.current && desiredTime.current !== null) {
                           audio.current.currentTime = Math.max(
@@ -386,8 +392,10 @@ export function RetainedAudio({
                         }
                       }}
                       onSeeked={() => {
-                        if (audio.current)
+                        if (audio.current) {
                           setPosition(audio.current.currentTime);
+                          onPositionChange?.(meeting.id, audio.current.currentTime);
+                        }
                       }}
                       onError={() =>
                         setError(

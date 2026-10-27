@@ -52,6 +52,8 @@ import brandIcon from "../assets/icon.png";
 import { useLibraryIndex } from "./lib/useLibraryIndex";
 import { meetingHeader, pruneDetails } from "./lib/library";
 import Settings from "./components/Settings";
+import SpeakerTimeline from "./components/SpeakerTimeline";
+import { speakerLabel } from "./lib/speakerTimeline";
 import LiveCoach from "./components/LiveCoach";
 import { GlobalDictationAnnouncer, GlobalDictationIndicator } from "./components/GlobalDictation";
 import { useGlobalDictation } from "./lib/useGlobalDictation";
@@ -285,6 +287,13 @@ export default function App() {
   >({});
   const pendingCorrections = useRef(new Map<string, TranscriptDraft>());
   const audioSeek = useRef<((seconds: number) => void) | null>(null);
+  const timelinePosition = useRef<((time: number | null) => void) | null>(null);
+  const bindTimelinePosition = useCallback((update: ((time: number | null) => void) | null) => {
+    timelinePosition.current = update;
+  }, []);
+  const bindAudioPosition = useCallback((meetingId: string, time: number | null) => {
+    if (selectedRef.current === meetingId) timelinePosition.current?.(time);
+  }, []);
   const bindAudioSeek = useCallback(
     (seek: ((seconds: number) => void) | null) => {
       audioSeek.current = seek;
@@ -1080,11 +1089,13 @@ export default function App() {
       setTab("transcript");
       notify("Audio imported and transcribed.");
     });
-  const jump = (time: number) => {
+  const jump = (time: number, segmentId?: string) => {
     if (!meeting) return;
+    timelinePosition.current?.(time);
     audioSeek.current?.(time);
     const ordered = [...meeting.segments].sort((a, b) => a.start - b.start);
     const match =
+      ordered.find((s) => s.id === segmentId) ??
       ordered.find((s) => s.start <= time && s.end >= time) ??
       [...ordered].reverse().find((s) => s.start <= time) ??
       ordered[0];
@@ -2464,6 +2475,7 @@ export default function App() {
                         setRecoverRequested(null);
                       }}
                       onSeekReady={bindAudioSeek}
+                      onPositionChange={bindAudioPosition}
                       openRequested={recoverRequested === meeting.id}
                     />
                     <div className="transcript-toolbar">
@@ -2522,10 +2534,7 @@ export default function App() {
                         (p) => p.id === s.speakerId,
                       ) ?? {
                         id: s.speakerId,
-                        name:
-                          s.speakerId === "you"
-                            ? "You"
-                            : s.speakerId.replace("speaker-", "Speaker "),
+                        name: speakerLabel(s.speakerId),
                         color: 1,
                       };
                       const bookmark = meeting.bookmarks.find(
@@ -2555,6 +2564,7 @@ export default function App() {
                                 onClick={() => {
                                   setHighlight(s.id);
                                   setFollowLive(false);
+                                  timelinePosition.current?.(s.start);
                                   audioSeek.current?.(s.start);
                                 }}
                               >
@@ -2666,6 +2676,16 @@ export default function App() {
                 )}
               </article>
             </div>
+            {tab === "transcript" && !dictation && (
+              <SpeakerTimeline
+                key={meeting.id}
+                meeting={meeting}
+                elapsed={elapsed}
+                onPositionReady={bindTimelinePosition}
+                selectedId={highlight}
+                onJump={jump}
+              />
+            )}
             <div className="document-status">
               <span>
                 <ShieldCheck size={12} />
