@@ -2542,8 +2542,10 @@ export default function App() {
                               </button>
                               <span className="segment-source">
                                 {s.source === "microphone"
-                                  ? "You"
-                                  : s.source === "import"
+                                  ? "Microphone"
+                                  : s.source === "mixed"
+                                    ? "Combined audio"
+                                    : s.source === "import"
                                     ? "Imported audio"
                                     : "Computer audio"}
                               </span>

@@ -341,7 +341,7 @@ impl TranscriptSegment {
         }
         if !matches!(
             v["source"].as_str(),
-            Some("microphone" | "system" | "import")
+            Some("microphone" | "system" | "import" | "mixed")
         ) {
             return Err(AppError::invalid("Unknown audio source."));
         }

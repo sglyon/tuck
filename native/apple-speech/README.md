@@ -115,3 +115,9 @@ The diagnostics-only `tuck-audio-eval` binary invokes this same production pass
 without a database, devices, or hosted AI. Use `scripts/evaluate-meeting.py` to
 preserve a read-only private baseline and compare new candidate outputs. Meeting
 audio, text, speaker vectors, and reference transcripts belong outside Git.
+
+Continuous turns from one speaker are grouped across input-source changes;
+segments assembled from both tracks retain `mixed` source provenance. Partial
+echoes are aligned as local phrase runs, so ASR substitutions do not leave
+interleaved duplicate words when an utterance misses the whole-phrase threshold.
+A distinct voice inside an echoed span and unmatched phrase endings remain.

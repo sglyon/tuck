@@ -220,16 +220,9 @@ fn fuse(system: Vec<Word>, microphone: Vec<Vec<Word>>, other: Vec<Word>) -> Vec<
                     .iter()
                     .all(|&(a, b)| (utterance[a].start - nearby[b].start).abs() < 0.25)
         };
-        let range = if duplicate {
-            matches
-                .first()
-                .zip(matches.last())
-                .map(|(first, last)| (first.0, last.0))
-        } else {
-            None
-        };
-        decisions.push((utterance, range));
+        decisions.push((utterance, nearby, matches, duplicate));
     }
+
     let mapping: HashMap<_, _> = votes
         .into_iter()
         .filter_map(|(mic, v)| {
@@ -240,9 +233,65 @@ fn fuse(system: Vec<Word>, microphone: Vec<Vec<Word>>, other: Vec<Word>) -> Vec<
         .collect();
     let mut output = system;
     output.extend(other);
-    for (utterance, range) in decisions {
+    for (utterance, nearby, matches, duplicate) in decisions {
+        let mut suppress = vec![false; utterance.len()];
+        if duplicate {
+            if let Some((first, last)) = matches.first().zip(matches.last()) {
+                for index in first.0..=last.0 {
+                    let before = matches.iter().rev().find(|&&(a, _)| a <= index).unwrap().0;
+                    let after = matches.iter().find(|&&(a, _)| a >= index).unwrap().0;
+                    // A different voice can interject inside an otherwise
+                    // echoed phrase. Only bridge ASR variants of the same voice.
+                    suppress[index] = utterance[index].speaker_id == utterance[before].speaker_id
+                        && utterance[index].speaker_id == utterance[after].speaker_id;
+                }
+            }
+        } else {
+            // A single ASR substitution can push an entire utterance below the
+            // coverage threshold. Detect locally aligned phrase runs as well.
+            // Require established cross-track speaker identity before treating
+            // intervening ASR variants as another rendering of the same voice.
+            let mut run = Vec::new();
+            let suppress_run = |run: &[(usize, usize)], suppress: &mut [bool]| {
+                if run.len() < 3 {
+                    return;
+                }
+                let first = run.first().unwrap().0;
+                let last = run.last().unwrap().0;
+                for index in first..=last {
+                    if mapping
+                        .get(&utterance[index].speaker_id)
+                        .is_some_and(|mapped| {
+                            run.iter().any(|&(_, b)| &nearby[b].speaker_id == mapped)
+                        })
+                    {
+                        suppress[index] = true;
+                    }
+                }
+            };
+            for &(a, b) in &matches {
+                let consistent =
+                    mapping.get(&utterance[a].speaker_id) == Some(&nearby[b].speaker_id);
+                let contiguous = run
+                    .last()
+                    .is_none_or(|&(prior_a, prior_b): &(usize, usize)| {
+                        a - prior_a <= 3
+                            && b - prior_b <= 3
+                            && utterance[a].start - utterance[prior_a].end < 1.0
+                            && utterance[a].speaker_id == utterance[prior_a].speaker_id
+                    });
+                if !consistent || !contiguous {
+                    suppress_run(&run, &mut suppress);
+                    run.clear();
+                }
+                if consistent {
+                    run.push((a, b));
+                }
+            }
+            suppress_run(&run, &mut suppress);
+        }
         for (index, mut word) in utterance.into_iter().enumerate() {
-            if range.is_some_and(|(first, last)| index >= first && index <= last) {
+            if suppress[index] {
                 continue;
             }
             word.speaker_id = if word.speaker_id == "unassigned" {
@@ -264,10 +313,12 @@ fn segments(words: Vec<Word>, meeting: &str) -> Vec<Value> {
     for w in words {
         if let Some(last) = output.last_mut() {
             if last["speakerId"] == w.speaker_id
-                && last["source"] == w.source
                 && w.start - last["end"].as_f64().unwrap_or(0.) < 1.
                 && w.end - last["start"].as_f64().unwrap_or(0.) < 30.
             {
+                if last["source"] != w.source {
+                    last["source"] = json!("mixed");
+                }
                 last["text"] = json!(format!(
                     "{} {}",
                     last["text"].as_str().unwrap_or(""),
@@ -395,6 +446,92 @@ mod tests {
         let output = fuse(system, vec![echo], vec![]);
         assert_eq!(output.len(), 5);
         assert_eq!(output.last().unwrap().text, "tomorrow");
+    }
+    #[test]
+    fn partial_echo_with_asr_variants_does_not_interleave_duplicate_words() {
+        let context = [
+            "the",
+            "first",
+            "part",
+            "establishes",
+            "the",
+            "shared",
+            "voice",
+            "on",
+            "these",
+            "two",
+            "recording",
+            "tracks",
+        ];
+        let system: Vec<_> = context
+            .iter()
+            .chain(
+                [
+                    "it", "gets", "deployed", "to", "the", "server", "very", "soon",
+                ]
+                .iter(),
+            )
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2, "system", "S1"))
+            .collect();
+        let echo = context
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2, "microphone", "M1"))
+            .collect();
+        let variant = [
+            "it", "gets", "deployed", "t", "the", "sever", "very", "soon", "our", "local", "copy",
+            "works",
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, t)| word(t, 2.4 + i as f64 * 0.2, "microphone", "M1"))
+        .collect();
+        let output = fuse(system, vec![echo, variant], vec![]);
+        for text in ["it", "gets", "deployed"] {
+            assert_eq!(output.iter().filter(|w| w.text == text).count(), 1);
+        }
+        assert!(!output.iter().any(|w| w.text == "sever"));
+        assert!(
+            output.iter().any(|w| w.text == "copy"),
+            "unique trailing speech must survive"
+        );
+    }
+    #[test]
+    fn different_voice_inside_echoing_utterance_is_preserved() {
+        let phrase = ["we", "can", "ship", "this"];
+        let system: Vec<_> = phrase
+            .iter()
+            .enumerate()
+            .map(|(i, t)| word(t, i as f64 * 0.2, "system", "A"))
+            .collect();
+        let mut echo = system
+            .iter()
+            .cloned()
+            .map(|mut w| {
+                w.source = "microphone".into();
+                w
+            })
+            .collect::<Vec<_>>();
+        echo.insert(2, word("Wait!", 0.3, "microphone", "B"));
+        let output = fuse(system, vec![echo], vec![]);
+        assert_eq!(output.len(), 5);
+        assert!(output.iter().any(|w| w.text == "Wait!"));
+    }
+    #[test]
+    fn continuous_speaker_turn_groups_across_sources_with_honest_provenance() {
+        let output = segments(
+            vec![
+                word("One", 0., "system", "A"),
+                word("continuous", 0.2, "microphone", "A"),
+                word("sentence.", 0.4, "system", "A"),
+            ],
+            "meeting",
+        );
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0]["text"], "One continuous sentence.");
+        assert_eq!(output[0]["source"], "mixed");
+        tuck_core::domain::TranscriptSegment::from_dto(output[0].clone()).unwrap();
     }
     #[test]
     fn word_boundary_changes_speaker_without_retranscribing() {

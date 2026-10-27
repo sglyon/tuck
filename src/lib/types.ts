@@ -21,7 +21,7 @@ export interface Segment {
   edited?: boolean;
   correctedAt?: string;
   speakerId: string;
-  source: "microphone" | "system" | "import";
+  source: "microphone" | "system" | "import" | "mixed";
 }
 export interface Speaker {
   id: string;
